@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/broker.dart';
 
@@ -7,50 +8,80 @@ class StorageService {
   static const String _brokersKey = 'saved_brokers_data';
 
   // Save watchlist symbols
-  static Future<void> saveSavedStockSymbols(List<String> symbols) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_savedStocksKey, symbols);
+  static Future<bool> saveSavedStockSymbols(List<String> symbols) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setStringList(_savedStocksKey, symbols);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving stock symbols: $e');
+      }
+      return false;
+    }
   }
 
   // Load watchlist symbols
   static Future<List<String>> getSavedStockSymbols() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_savedStocksKey) ?? ['AAPL', 'NVDA', 'TSLA', 'AMZN'];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String>? saved = prefs.getStringList(_savedStocksKey);
+      if (saved != null && saved.isNotEmpty) {
+        return saved;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading stock symbols: $e');
+      }
+    }
+    return ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'RELIANCE', 'BTC-USD'];
   }
 
   // Save broker configurations
-  static Future<void> saveBrokers(List<BrokerAccount> brokers) async {
-    final prefs = await SharedPreferences.getInstance();
-    final List<String> encodedList =
-        brokers.map((broker) => jsonEncode(broker.toJson())).toList();
-    await prefs.setStringList(_brokersKey, encodedList);
+  static Future<bool> saveBrokers(List<BrokerAccount> brokers) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String> encodedList =
+          brokers.map((broker) => jsonEncode(broker.toJson())).toList();
+      return await prefs.setStringList(_brokersKey, encodedList);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving brokers: $e');
+      }
+      return false;
+    }
   }
 
   // Load broker configurations
   static Future<List<BrokerAccount>> getBrokers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final List<String>? encodedList = prefs.getStringList(_brokersKey);
-    if (encodedList == null || encodedList.isEmpty) {
-      return _getDefaultBrokers();
-    }
     try {
-      final loaded = encodedList
-          .map((item) => BrokerAccount.fromJson(jsonDecode(item)))
-          .toList();
-      
-      // Ensure Dhan Broker is present if missing from older saved state
-      if (!loaded.any((b) => b.id == 'dhan')) {
-        loaded.insert(1, BrokerAccount(
-          id: 'dhan',
-          name: 'Dhan HQ',
-          logoSymbol: 'DH',
-          description: 'Lightning-fast superfast stock & F&O trading REST API.',
-        ));
+      final prefs = await SharedPreferences.getInstance();
+      final List<String>? encodedList = prefs.getStringList(_brokersKey);
+      if (encodedList != null && encodedList.isNotEmpty) {
+        final loaded = encodedList
+            .map((item) => BrokerAccount.fromJson(jsonDecode(item)))
+            .toList();
+
+        // Ensure Dhan Broker is present if missing from older state
+        if (!loaded.any((b) => b.id == 'dhan')) {
+          loaded.insert(
+            1,
+            BrokerAccount(
+              id: 'dhan',
+              name: 'Dhan HQ',
+              logoSymbol: 'DH',
+              description:
+                  'Lightning-fast superfast stock & F&O trading REST API.',
+            ),
+          );
+        }
+        return loaded;
       }
-      return loaded;
-    } catch (_) {
-      return _getDefaultBrokers();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading brokers: $e');
+      }
     }
+    return _getDefaultBrokers();
   }
 
   static List<BrokerAccount> _getDefaultBrokers() {
@@ -77,7 +108,8 @@ class StorageService {
         id: 'ibkr',
         name: 'Interactive Brokers',
         logoSymbol: 'IB',
-        description: 'Global market access API for equities, options & futures.',
+        description:
+            'Global market access API for equities, options & futures.',
       ),
       BrokerAccount(
         id: 'binance',

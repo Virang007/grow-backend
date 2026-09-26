@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/stock.dart';
 import '../services/stock_service.dart';
@@ -20,21 +21,27 @@ class StockDashboardPage extends StatefulWidget {
 
 class _StockDashboardPageState extends State<StockDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
-  List<Stock> _allStocks = [];
+  Timer? _debounceTimer;
+
+  List<Stock> _watchlistStocks = [];
   List<Stock> _searchResults = [];
   List<String> _savedSymbols = [];
+
   bool _isSearching = false;
   bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _searchController.addListener(_onSearchChanged);
+    _searchController.addListener(_onSearchInputChanged);
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -42,48 +49,121 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
     });
 
-    _savedSymbols = await StorageService.getSavedStockSymbols();
-    _allStocks = StockService.getAllStocks();
+    try {
+      _savedSymbols = await StorageService.getSavedStockSymbols();
+      final fetched = await StockService.fetchBatchStockQuotes(_savedSymbols);
 
-    for (var stock in _allStocks) {
-      stock.isSaved = _savedSymbols.contains(stock.symbol);
+      for (var stock in fetched) {
+        stock.isSaved = true;
+      }
+
+      setState(() {
+        _watchlistStocks = fetched;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = 'Unable to fetch market quotes. Check your connection.';
+      });
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
-  void _onSearchChanged() {
+  void _onSearchInputChanged() {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
+      _debounceTimer?.cancel();
       setState(() {
         _isSearching = false;
         _searchResults = [];
       });
-    } else {
+      return;
+    }
+
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
       setState(() {
         _isSearching = true;
-        _searchResults = StockService.searchStocks(query);
+        _isLoading = true;
       });
-    }
+
+      try {
+        final results = await StockService.searchLiveStocks(query);
+        for (var stock in results) {
+          stock.isSaved = _savedSymbols.contains(stock.symbol);
+        }
+
+        if (mounted) {
+          setState(() {
+            _searchResults = results;
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Search failed. Please try again.'),
+              backgroundColor: Color(0xFFEF4444),
+            ),
+          );
+        }
+      }
+    });
   }
 
   Future<void> _toggleSaveStock(Stock stock) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final bool newSavedState = !stock.isSaved;
+
     setState(() {
-      stock.isSaved = !stock.isSaved;
-      if (stock.isSaved) {
+      stock.isSaved = newSavedState;
+      if (newSavedState) {
         if (!_savedSymbols.contains(stock.symbol)) {
           _savedSymbols.add(stock.symbol);
         }
+        if (!_watchlistStocks.any((s) => s.symbol == stock.symbol)) {
+          _watchlistStocks.add(stock);
+        }
       } else {
         _savedSymbols.remove(stock.symbol);
+        _watchlistStocks.removeWhere((s) => s.symbol == stock.symbol);
       }
     });
 
-    await StorageService.saveSavedStockSymbols(_savedSymbols);
+    final success = await StorageService.saveSavedStockSymbols(_savedSymbols);
+
+    if (success) {
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            newSavedState
+                ? '${stock.symbol} added to Watchlist'
+                : '${stock.symbol} removed from Watchlist',
+          ),
+          backgroundColor: newSavedState
+              ? const Color(0xFF10B981)
+              : const Color(0xFFEF4444),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Failed to update Watchlist storage.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+    }
   }
 
   void _openStockDetail(Stock stock) {
@@ -104,9 +184,6 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final savedStocksList =
-        _allStocks.where((s) => _savedSymbols.contains(s.symbol)).toList();
-
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
       body: SafeArea(
@@ -116,7 +193,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
           backgroundColor: const Color(0xFF1E222D),
           child: CustomScrollView(
             slivers: [
-              // Top App Bar
+              // Top Header
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -137,7 +214,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Real-time quotes & watchlist',
+                            'Live quotes & watchlist',
                             style: TextStyle(
                               color: Colors.grey[400],
                               fontSize: 13,
@@ -236,7 +313,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                 ),
               ),
 
-              // Content View: Search Results vs Saved Watchlist
+              // Search Results vs Watchlist View
               if (_isSearching) ...[
                 SliverToBoxAdapter(
                   child: Padding(
@@ -251,31 +328,40 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                     ),
                   ),
                 ),
-                _searchResults.isEmpty
-                    ? SliverToBoxAdapter(
-                        child: Container(
-                          padding: const EdgeInsets.all(40),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'No stocks found matching "${_searchController.text}"',
-                            style: TextStyle(color: Colors.grey[500]),
+                _isLoading
+                    ? const SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(30),
+                            child: CircularProgressIndicator(color: Color(0xFF2563EB)),
                           ),
                         ),
                       )
-                    : SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final stock = _searchResults[index];
-                            return _buildStockListItem(stock);
-                          },
-                          childCount: _searchResults.length,
-                        ),
-                      ),
+                    : _searchResults.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: Container(
+                              padding: const EdgeInsets.all(40),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'No stocks found for "${_searchController.text}"',
+                                style: TextStyle(color: Colors.grey[500]),
+                              ),
+                            ),
+                          )
+                        : SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final stock = _searchResults[index];
+                                return _buildStockListItem(stock);
+                              },
+                              childCount: _searchResults.length,
+                            ),
+                          ),
               ] else ...[
-                // Quick Market Summary Cards
+                // Market Summary Ribbon
                 SliverToBoxAdapter(
                   child: Container(
-                    height: 100,
+                    height: 95,
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     child: ListView(
                       scrollDirection: Axis.horizontal,
@@ -290,7 +376,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                   ),
                 ),
 
-                // Watchlist Section Header
+                // Watchlist Header
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -306,7 +392,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                           ),
                         ),
                         Text(
-                          '${savedStocksList.length} Saved',
+                          '${_watchlistStocks.length} Saved',
                           style: TextStyle(
                             color: Colors.grey[400],
                             fontSize: 13,
@@ -317,61 +403,95 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                   ),
                 ),
 
-                // Watchlist Stock Cards
-                _isLoading
-                    ? const SliverToBoxAdapter(
-                        child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(30),
-                            child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                // Error View
+                if (_hasError)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.wifi_off, color: Color(0xFFEF4444), size: 36),
+                          const SizedBox(height: 8),
+                          Text(
+                            _errorMessage,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
                           ),
-                        ),
-                      )
-                    : savedStocksList.isEmpty
-                        ? SliverToBoxAdapter(
-                            child: Container(
-                              margin: const EdgeInsets.all(16),
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF161B22),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFF2A2E39)),
-                              ),
-                              child: Column(
-                                children: [
-                                  Icon(Icons.bookmark_outline,
-                                      size: 44, color: Colors.grey[600]),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    'Your Watchlist is Empty',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Use the search bar above to search for any stock and tap the save icon to add it here.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final stock = savedStocksList[index];
-                                return _buildStockListItem(stock);
-                              },
-                              childCount: savedStocksList.length,
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: _loadData,
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Retry Connection'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2563EB),
+                              foregroundColor: Colors.white,
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_isLoading)
+                  const SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(30),
+                        child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                      ),
+                    ),
+                  )
+                else if (_watchlistStocks.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B22),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF2A2E39)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.bookmark_outline,
+                              size: 44, color: Colors.grey[600]),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Your Watchlist is Empty',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Use the search bar above to search for any stock ticker and tap the bookmark icon to add it here.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final stock = _watchlistStocks[index];
+                        return _buildStockListItem(stock);
+                      },
+                      childCount: _watchlistStocks.length,
+                    ),
+                  ),
               ],
             ],
           ),

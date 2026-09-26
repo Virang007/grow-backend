@@ -41,8 +41,10 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
     final apiKeyController = TextEditingController(text: broker.apiKey);
     final apiSecretController = TextEditingController(text: broker.apiSecret);
     final accountIdController = TextEditingController(text: broker.accountId);
+
     String selectedEnv = broker.environment;
     bool isTesting = false;
+    String? validationError;
 
     final bool isDhan = broker.id == 'dhan';
 
@@ -84,7 +86,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Title
+                    // Header Title
                     Row(
                       children: [
                         Container(
@@ -148,7 +150,37 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Environment toggle
+                    // Validation Error Banner
+                    if (validationError != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFEF4444)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: Color(0xFFEF4444), size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                validationError!,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Environment Toggle
                     Row(
                       children: [
                         Expanded(
@@ -214,7 +246,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Custom Broker Name & Symbol (if custom broker)
+                    // Custom Broker Name & Tag
                     if (broker.isCustom || isNewCustom) ...[
                       Row(
                         children: [
@@ -222,8 +254,8 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                             flex: 3,
                             child: _buildTextField(
                               controller: nameController,
-                              label: 'Broker Name',
-                              hint: 'e.g. AngelOne, Tradovate, Choice',
+                              label: 'Broker Name *',
+                              hint: 'e.g. AngelOne, Tradovate',
                               icon: Icons.business_outlined,
                             ),
                           ),
@@ -232,7 +264,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                             flex: 1,
                             child: _buildTextField(
                               controller: logoSymbolController,
-                              label: 'Tag',
+                              label: 'Tag *',
                               hint: 'e.g. AO',
                               icon: Icons.tag,
                             ),
@@ -253,8 +285,8 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                     _buildTextField(
                       controller: accountIdController,
                       label: isDhan
-                          ? 'Dhan Client ID'
-                          : 'Account ID / Client Code',
+                          ? 'Dhan Client ID *'
+                          : 'Account ID / Client Code *',
                       hint: isDhan
                           ? 'e.g. 1000001234'
                           : 'e.g. U1234567 or AB1234',
@@ -262,10 +294,10 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // API Key / Client ID
+                    // API Key / App Key
                     _buildTextField(
                       controller: apiKeyController,
-                      label: isDhan ? 'Dhan App Key / ID' : 'API Key',
+                      label: isDhan ? 'Dhan App Key / ID *' : 'API Key *',
                       hint: isDhan
                           ? 'Enter Dhan API App Key'
                           : 'Enter your broker API key',
@@ -273,12 +305,12 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // API Secret / Access Token
+                    // API Secret / Token
                     _buildTextField(
                       controller: apiSecretController,
                       label: isDhan
-                          ? 'Dhan Access Token / JWT'
-                          : 'API Secret / Access Token',
+                          ? 'Dhan Access Token / JWT *'
+                          : 'API Secret / Access Token *',
                       hint: isDhan
                           ? 'Enter generated Dhan Access Token'
                           : 'Enter secret key or access token',
@@ -294,6 +326,43 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                         onPressed: isTesting
                             ? null
                             : () async {
+                                // Form Validation Checks
+                                setModalState(() {
+                                  validationError = null;
+                                });
+
+                                if ((broker.isCustom || isNewCustom) &&
+                                    nameController.text.trim().isEmpty) {
+                                  setModalState(() {
+                                    validationError = 'Please enter a Broker Name.';
+                                  });
+                                  return;
+                                }
+
+                                if (accountIdController.text.trim().isEmpty) {
+                                  setModalState(() {
+                                    validationError = isDhan
+                                        ? 'Please enter your Dhan Client ID.'
+                                        : 'Please enter your Account ID / Client Code.';
+                                  });
+                                  return;
+                                }
+
+                                if (apiKeyController.text.trim().isEmpty) {
+                                  setModalState(() {
+                                    validationError = 'Please enter your API Key / App Key.';
+                                  });
+                                  return;
+                                }
+
+                                if (apiSecretController.text.trim().isEmpty) {
+                                  setModalState(() {
+                                    validationError =
+                                        'Please enter your API Secret / Access Token.';
+                                  });
+                                  return;
+                                }
+
                                 setModalState(() {
                                   isTesting = true;
                                 });
@@ -301,76 +370,82 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                                 final navigator = Navigator.of(modalContext);
                                 final messenger = ScaffoldMessenger.of(context);
 
-                                // Simulate API authentication delay
-                                await Future.delayed(
-                                    const Duration(milliseconds: 1500));
+                                try {
+                                  // Simulate authenticating against API endpoint
+                                  await Future.delayed(
+                                      const Duration(milliseconds: 1400));
 
-                                setState(() {
-                                  if (isNewCustom) {
-                                    final customId =
-                                        'custom_${DateTime.now().millisecondsSinceEpoch}';
-                                    final newBroker = BrokerAccount(
-                                      id: customId,
-                                      name: nameController.text.trim().isEmpty
-                                          ? 'Custom Broker'
-                                          : nameController.text.trim(),
-                                      logoSymbol: logoSymbolController.text
-                                              .trim()
-                                              .isEmpty
-                                          ? 'CB'
-                                          : logoSymbolController.text
-                                              .trim()
-                                              .toUpperCase(),
-                                      description:
-                                          'Custom REST API Trading Endpoint.',
-                                      apiKey: apiKeyController.text,
-                                      apiSecret: apiSecretController.text,
-                                      accountId: accountIdController.text.isEmpty
-                                          ? 'ACC-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
-                                          : accountIdController.text,
-                                      baseUrl: baseUrlController.text,
-                                      environment: selectedEnv,
-                                      status: BrokerStatus.connected,
-                                      lastConnectedAt: DateTime.now(),
-                                      isCustom: true,
-                                    );
-                                    _brokers.insert(0, newBroker);
-                                  } else {
-                                    if (broker.isCustom) {
-                                      broker.name = nameController.text.trim().isEmpty
-                                          ? 'Custom Broker'
-                                          : nameController.text.trim();
-                                      broker.logoSymbol = logoSymbolController.text
-                                              .trim()
-                                              .isEmpty
-                                          ? 'CB'
-                                          : logoSymbolController.text
-                                              .trim()
-                                              .toUpperCase();
-                                      broker.baseUrl = baseUrlController.text;
+                                  setState(() {
+                                    if (isNewCustom) {
+                                      final customId =
+                                          'custom_${DateTime.now().millisecondsSinceEpoch}';
+                                      final newBroker = BrokerAccount(
+                                        id: customId,
+                                        name: nameController.text.trim(),
+                                        logoSymbol: logoSymbolController.text
+                                                .trim()
+                                                .isEmpty
+                                            ? 'CB'
+                                            : logoSymbolController.text
+                                                .trim()
+                                                .toUpperCase(),
+                                        description:
+                                            'Custom REST API Trading Endpoint.',
+                                        apiKey: apiKeyController.text.trim(),
+                                        apiSecret: apiSecretController.text.trim(),
+                                        accountId: accountIdController.text.trim(),
+                                        baseUrl: baseUrlController.text.trim(),
+                                        environment: selectedEnv,
+                                        status: BrokerStatus.connected,
+                                        lastConnectedAt: DateTime.now(),
+                                        isCustom: true,
+                                      );
+                                      _brokers.insert(0, newBroker);
+                                    } else {
+                                      if (broker.isCustom) {
+                                        broker.name = nameController.text.trim();
+                                        broker.logoSymbol = logoSymbolController.text
+                                                .trim()
+                                                .isEmpty
+                                            ? 'CB'
+                                            : logoSymbolController.text
+                                                .trim()
+                                                .toUpperCase();
+                                        broker.baseUrl = baseUrlController.text.trim();
+                                      }
+                                      broker.apiKey = apiKeyController.text.trim();
+                                      broker.apiSecret = apiSecretController.text.trim();
+                                      broker.accountId = accountIdController.text.trim();
+                                      broker.environment = selectedEnv;
+                                      broker.status = BrokerStatus.connected;
+                                      broker.lastConnectedAt = DateTime.now();
                                     }
-                                    broker.apiKey = apiKeyController.text;
-                                    broker.apiSecret = apiSecretController.text;
-                                    broker.accountId = accountIdController.text.isEmpty
-                                        ? 'ACC-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
-                                        : accountIdController.text;
-                                    broker.environment = selectedEnv;
-                                    broker.status = BrokerStatus.connected;
-                                    broker.lastConnectedAt = DateTime.now();
+                                  });
+
+                                  final savedSuccess =
+                                      await StorageService.saveBrokers(_brokers);
+                                  widget.onBrokersUpdated();
+
+                                  navigator.pop();
+                                  if (savedSuccess) {
+                                    messenger.clearSnackBars();
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '${isNewCustom ? nameController.text : broker.name} connected successfully!',
+                                        ),
+                                        backgroundColor: const Color(0xFF10B981),
+                                        duration: const Duration(seconds: 3),
+                                      ),
+                                    );
                                   }
-                                });
-
-                                await StorageService.saveBrokers(_brokers);
-                                widget.onBrokersUpdated();
-
-                                navigator.pop();
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        '${isNewCustom ? nameController.text : broker.name} connected successfully!'),
-                                    backgroundColor: const Color(0xFF10B981),
-                                  ),
-                                );
+                                } catch (e) {
+                                  setModalState(() {
+                                    isTesting = false;
+                                    validationError =
+                                        'Connection failed. Unable to authenticate API keys.';
+                                  });
+                                }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isDhan
@@ -437,19 +512,49 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
   }
 
   Future<void> _deleteCustomBroker(BrokerAccount broker) async {
-    setState(() {
-      _brokers.removeWhere((b) => b.id == broker.id);
-    });
-    await StorageService.saveBrokers(_brokers);
-    widget.onBrokersUpdated();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF161B22),
+          title: Text(
+            'Remove ${broker.name}?',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Are you sure you want to remove this custom broker connection?',
+            style: TextStyle(color: Colors.grey[400]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+              child: const Text('Remove', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${broker.name} removed.'),
-          backgroundColor: const Color(0xFFEF4444),
-        ),
-      );
+    if (confirm == true) {
+      setState(() {
+        _brokers.removeWhere((b) => b.id == broker.id);
+      });
+      await StorageService.saveBrokers(_brokers);
+      widget.onBrokersUpdated();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${broker.name} removed.'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
     }
   }
 
@@ -536,7 +641,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Page Header
+                  // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -580,7 +685,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Encryption Banner
+                  // Encryption Notice
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -692,7 +797,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Connection Summary Row
+                  // Summary Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -728,7 +833,7 @@ class _BrokerSettingsPageState extends State<BrokerSettingsPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Broker Cards List
+                  // Broker Cards
                   ..._brokers.map((broker) => _buildBrokerCard(broker)),
                 ],
               ),
