@@ -32,15 +32,27 @@ class PortfolioView extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Indian Stock Market Holdings & Virtual Cash',
+                'Indian Stock Market Holdings via MegaBull API',
                 style: TextStyle(color: Colors.grey[400], fontSize: 13),
               ),
               const SizedBox(height: 16),
 
-              // Total Portfolio Value & Virtual Cash Card
+              // Portfolio Summary Card
               Obx(() {
+                if (portfolioController.isLoading.value) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(30),
+                      child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                    ),
+                  );
+                }
+
+                if (portfolioController.hasApiError.value) {
+                  return _buildErrorCard(portfolioController.fetchPortfolio);
+                }
+
                 final double totalVal = portfolioController.totalPortfolioValue;
-                final double cash = portfolioController.virtualBalance.value;
                 final double pnl = portfolioController.totalPnl;
                 final double pnlPct = portfolioController.totalPnlPercent;
                 final bool isProfit = pnl >= 0;
@@ -58,7 +70,7 @@ class PortfolioView extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total Portfolio Value',
+                        'Total Holdings Value',
                         style: TextStyle(color: Colors.grey[400], fontSize: 13),
                       ),
                       const SizedBox(height: 4),
@@ -80,12 +92,12 @@ class PortfolioView extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Virtual Cash Balance',
+                              Text('Invested Value',
                                   style: TextStyle(
                                       color: Colors.grey[400], fontSize: 12)),
                               const SizedBox(height: 2),
                               Text(
-                                '₹${cash.toStringAsFixed(2)}',
+                                '₹${portfolioController.totalInvested.toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   color: Color(0xFF2563EB),
                                   fontWeight: FontWeight.bold,
@@ -152,6 +164,10 @@ class PortfolioView extends StatelessWidget {
                   );
                 }
 
+                if (portfolioController.hasApiError.value) {
+                  return const SizedBox.shrink();
+                }
+
                 if (portfolioController.holdings.isEmpty) {
                   return Container(
                     padding: const EdgeInsets.all(24),
@@ -175,7 +191,7 @@ class PortfolioView extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Place Paper BUY orders on NSE/BSE stocks to build your demo portfolio.',
+                          'Place Paper BUY orders on NSE/BSE stocks to build your portfolio.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey[400], fontSize: 13),
                         ),
@@ -193,6 +209,47 @@ class PortfolioView extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(VoidCallback onRetry) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.cloud_off, size: 44, color: Color(0xFFEF4444)),
+          const SizedBox(height: 12),
+          const Text(
+            'Unable to load portfolio',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Could not connect to MegaBull API. Check your connection or API key in Broker Settings.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[400], fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

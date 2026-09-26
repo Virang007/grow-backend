@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:collection/collection.dart';
 import '../models/stock_model.dart';
+import 'megabull_api_service.dart';
 
 class StockService {
   static final Map<String, Stock> _cache = {};
@@ -76,8 +78,22 @@ class StockService {
           final String exchangeName =
               cleanSymbol.endsWith('.BO') ? 'BSE' : 'NSE';
 
+          final String tickerOnly = cleanSymbol.replaceAll('.NS', '').replaceAll('.BO', '').trim().toUpperCase();
+          String csvToken = tickerOnly;
+
+          try {
+            final mbInstruments = await MegaBullApiService.fetchInstruments();
+            final matched = mbInstruments.firstWhereOrNull((inst) {
+              final sym = inst.symbol.replaceAll('.NS', '').replaceAll('.BO', '').trim().toUpperCase();
+              return sym == tickerOnly;
+            });
+            if (matched != null && matched.instrumentToken.isNotEmpty) {
+              csvToken = matched.instrumentToken;
+            }
+          } catch (_) {}
+
           final stock = Stock(
-            instrumentToken: cleanSymbol.hashCode.abs().toString(),
+            instrumentToken: csvToken,
             symbol: cleanSymbol,
             name: meta['shortName'] ?? meta['longName'] ?? _getIndianStockName(cleanSymbol),
             exchange: exchangeName,
@@ -99,11 +115,15 @@ class StockService {
           return stock;
         }
       }
-    } catch (_) {
-      // Ignore API errors and fallback gracefully
+    } catch (e) {
+      print('[STOCK SERVICE ERROR] Fetch live stock quote failed for $cleanSymbol: $e');
     }
 
-    return _generateIndianFallbackQuote(cleanSymbol);
+    if (_cache.containsKey(cleanSymbol)) {
+      return _cache[cleanSymbol]!;
+    }
+
+    return null;
   }
 
   /// Batch fetch quotes for list of Indian stock symbols
@@ -161,47 +181,7 @@ class StockService {
     return [];
   }
 
-  static Stock _generateIndianFallbackQuote(String symbol) {
-    if (_cache.containsKey(symbol)) {
-      return _cache[symbol]!;
-    }
 
-    final String displaySym = symbol.replaceAll('.NS', '').replaceAll('.BO', '');
-    final String exchange = symbol.endsWith('.BO') ? 'BSE' : 'NSE';
-
-    final double basePrice = (displaySym.hashCode.abs() % 2500) + 150.0;
-    final double change = ((displaySym.hashCode % 120) - 40) / 2.0;
-    final double percentChange = (change / basePrice) * 100;
-
-    final stock = Stock(
-      instrumentToken: symbol.hashCode.abs().toString(),
-      symbol: symbol,
-      name: _getIndianStockName(symbol),
-      exchange: exchange,
-      price: double.parse(basePrice.toStringAsFixed(2)),
-      change: double.parse(change.toStringAsFixed(2)),
-      percentChange: double.parse(percentChange.toStringAsFixed(2)),
-      open: basePrice - 8.0,
-      high: basePrice + 15.0,
-      low: basePrice - 12.0,
-      swingHigh: basePrice + 25.0,
-      swingLow: basePrice - 20.0,
-      marketCap: '₹${(basePrice * 8.5).toStringAsFixed(1)} Cr',
-      peRatio: 22.8,
-      volume: 3400000.0,
-      chartData: [
-        basePrice - 12.0,
-        basePrice - 6.0,
-        basePrice + 2.0,
-        basePrice - 4.0,
-        basePrice + 8.0,
-        basePrice + change
-      ],
-    );
-
-    _cache[symbol] = stock;
-    return stock;
-  }
 
   static String _getIndianStockName(String symbol) {
     final clean = symbol.replaceAll('.NS', '').replaceAll('.BO', '');

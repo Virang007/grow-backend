@@ -246,22 +246,60 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
 
-              // Market Indices Ribbon
+              // Market Indices Ribbon — real data only when connected
               SliverToBoxAdapter(
-                child: Container(
-                  height: 90,
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      _buildIndexCard('NIFTY 50', '25,410.20', '+0.45%', true),
-                      _buildIndexCard('SENSEX', '83,184.40', '+0.52%', true),
-                      _buildIndexCard('NIFTY BANK', '52,240.10', '+0.38%', true),
-                      _buildIndexCard('NIFTY IT', '42,890.60', '-0.15%', false),
-                    ],
-                  ),
-                ),
+                child: Obx(() {
+                  final count = brokerController.connectedCount.value;
+                  if (count == 0) {
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B22),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF2A2E39)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.show_chart, color: Colors.grey[600], size: 18),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Connect a broker to view live NIFTY / SENSEX indices',
+                            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  // When broker is connected, indices can be loaded from the broker API
+                  // For now show a loading placeholder until index API is wired up
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161B22),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF2A2E39)),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Loading live index data...',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ),
 
               // Watchlist Section Title
@@ -409,46 +447,6 @@ class _DashboardViewState extends State<DashboardView> {
             }),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildIndexCard(
-      String title, String value, String change, bool isPositive) {
-    return Container(
-      width: 135,
-      margin: const EdgeInsets.only(right: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2A2E39)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title,
-              style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 2),
-          Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13)),
-          const SizedBox(height: 2),
-          Text(change,
-              style: TextStyle(
-                  color: isPositive
-                      ? const Color(0xFF10B981)
-                      : const Color(0xFFEF4444),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11)),
-        ],
       ),
     );
   }

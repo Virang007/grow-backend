@@ -33,6 +33,7 @@ class OrderController extends GetxController {
     double triggerPrice = 0.0,
   }) async {
     if (quantity <= 0) {
+      print('[ORDER CONTROLLER ERROR] Invalid Quantity: $quantity');
       Get.snackbar(
         'Invalid Quantity',
         'Quantity must be greater than 0',
@@ -41,7 +42,14 @@ class OrderController extends GetxController {
       return false;
     }
 
-    if (orderType == OrderType.LIMIT && price <= 0) {
+    // Default to instrument market price if MARKET order price is 0
+    double actualPrice = price;
+    if (orderType == OrderType.MARKET && actualPrice <= 0) {
+      actualPrice = instrument.price;
+    }
+
+    if (orderType == OrderType.LIMIT && actualPrice <= 0) {
+      print('[ORDER CONTROLLER ERROR] Invalid Limit Price: $actualPrice');
       Get.snackbar(
         'Invalid Limit Price',
         'Please enter a valid price for LIMIT order',
@@ -51,6 +59,7 @@ class OrderController extends GetxController {
     }
 
     if (orderType == OrderType.SL && triggerPrice <= 0) {
+      print('[ORDER CONTROLLER ERROR] Invalid Trigger Price: $triggerPrice');
       Get.snackbar(
         'Invalid Trigger Price',
         'Please enter a valid trigger price for Stop-Loss order',
@@ -60,6 +69,7 @@ class OrderController extends GetxController {
     }
 
     isSubmitting.value = true;
+    print('[ORDER CONTROLLER] Placing ${transactionType.name} order for ${instrument.symbol}, Qty: $quantity, Price: ₹$actualPrice');
 
     final result = await MegaBullApiService.placePaperOrder(
       instrumentToken: instrument.instrumentToken,
@@ -68,7 +78,7 @@ class OrderController extends GetxController {
       transactionType: transactionType,
       orderType: orderType,
       quantity: quantity,
-      price: price,
+      price: actualPrice,
       triggerPrice: triggerPrice,
     );
 
@@ -83,26 +93,31 @@ class OrderController extends GetxController {
         transactionType: transactionType,
         orderType: orderType,
         quantity: quantity,
-        price: price,
+        price: actualPrice,
         triggerPrice: triggerPrice,
         status: OrderStatus.EXECUTED,
         timestamp: DateTime.now(),
       );
 
       orders.insert(0, newOrder);
+      print('[ORDER CONTROLLER SUCCESS] Order Executed: ${transactionType.name} $quantity shares of ${instrument.symbol}');
 
       Get.snackbar(
         'Order Executed!',
-        '${transactionType.name} $quantity shares of ${instrument.displaySymbol} at ₹${price.toStringAsFixed(2)}',
+        '${transactionType.name} $quantity shares of ${instrument.displaySymbol} at ₹${actualPrice.toStringAsFixed(2)}',
         snackPosition: SnackPosition.BOTTOM,
       );
 
       return true;
     } else {
+      final errMsg = result['message'] ?? 'Unable to place paper order.';
+      print('[ORDER CONTROLLER ERROR] Order Failed: $errMsg');
+
       Get.snackbar(
         'Order Failed',
-        result['message'] ?? 'Unable to place paper order.',
+        errMsg,
         snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 5),
       );
       return false;
     }

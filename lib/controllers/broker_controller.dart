@@ -19,6 +19,17 @@ class BrokerController extends GetxController {
     final loaded = await StorageService.getBrokers();
     brokers.assignAll(loaded);
     _updateConnectedCount();
+
+    final megabull = brokers.firstWhereOrNull((b) => b.id == 'megabull');
+    if (megabull != null && megabull.status == BrokerStatus.connected) {
+      MegaBullApiService.apiKey = megabull.apiKey.isNotEmpty
+          ? megabull.apiKey
+          : 'd35a226d-5b3a-44d7-a954-2db87bd069a7';
+      MegaBullApiService.baseUrl = megabull.baseUrl.isNotEmpty
+          ? megabull.baseUrl
+          : 'https://api.megabull.in';
+    }
+
     isLoading.value = false;
   }
 

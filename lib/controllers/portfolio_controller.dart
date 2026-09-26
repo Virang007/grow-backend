@@ -3,9 +3,11 @@ import '../models/holding_model.dart';
 import '../services/megabull_api_service.dart';
 
 class PortfolioController extends GetxController {
-  final RxDouble virtualBalance = 1000000.00.obs; // Initial ₹10,00,000 virtual cash balance
+  /// Virtual cash balance comes from the API. Null means not yet loaded.
+  final Rxn<double> virtualBalance = Rxn<double>();
   final RxList<HoldingItem> holdings = <HoldingItem>[].obs;
   final RxBool isLoading = false.obs;
+  final RxBool hasApiError = false.obs;
 
   @override
   void onInit() {
@@ -15,42 +17,15 @@ class PortfolioController extends GetxController {
 
   Future<void> fetchPortfolio() async {
     isLoading.value = true;
-    final apiHoldings = await MegaBullApiService.fetchHoldings();
-    if (apiHoldings.isNotEmpty) {
+    hasApiError.value = false;
+    try {
+      final apiHoldings = await MegaBullApiService.fetchHoldings();
+      // Only populate from real API data. Never load fake/demo data.
       holdings.assignAll(apiHoldings);
-    } else if (holdings.isEmpty) {
-      _loadDefaultPaperHoldings();
+    } catch (_) {
+      hasApiError.value = true;
     }
     isLoading.value = false;
-  }
-
-  void _loadDefaultPaperHoldings() {
-    holdings.assignAll([
-      HoldingItem(
-        instrumentToken: '738561',
-        symbol: 'RELIANCE.NS',
-        name: 'Reliance Industries Ltd.',
-        quantity: 15,
-        averagePrice: 2950.00,
-        currentPrice: 2985.40,
-      ),
-      HoldingItem(
-        instrumentToken: '2953217',
-        symbol: 'TCS.NS',
-        name: 'Tata Consultancy Services',
-        quantity: 10,
-        averagePrice: 4300.00,
-        currentPrice: 4280.00,
-      ),
-      HoldingItem(
-        instrumentToken: '408065',
-        symbol: 'INFY.NS',
-        name: 'Infosys Limited',
-        quantity: 25,
-        averagePrice: 1850.00,
-        currentPrice: 1890.50,
-      ),
-    ]);
   }
 
   double get totalInvested =>
@@ -64,12 +39,9 @@ class PortfolioController extends GetxController {
   double get totalPnlPercent =>
       totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0.0;
 
-  double get totalPortfolioValue => virtualBalance.value + currentValue;
+  double get totalPortfolioValue => currentValue;
 
   void updatePortfolioAfterBuy(String token, String symbol, String name, int qty, double price) {
-    final double cost = qty * price;
-    virtualBalance.value -= cost;
-
     final existingIndex = holdings.indexWhere((h) => h.symbol == symbol);
     if (existingIndex >= 0) {
       final existing = holdings[existingIndex];
@@ -111,7 +83,6 @@ class PortfolioController extends GetxController {
           currentPrice: price,
         );
       }
-      virtualBalance.value += qty * price;
     }
   }
 }

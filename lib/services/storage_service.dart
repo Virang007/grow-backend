@@ -45,15 +45,8 @@ class StorageService {
         print('Error loading stock symbols: $e');
       }
     }
-    return [
-      'RELIANCE.NS',
-      'TCS.NS',
-      'INFY.NS',
-      'HDFCBANK.NS',
-      'ICICIBANK.NS',
-      'SBIN.NS',
-      'TATAMOTORS.NS',
-    ];
+    // Return empty list — user must search and add real stocks
+    return [];
   }
 
   // Save broker configurations
@@ -84,8 +77,16 @@ class StorageService {
         // Filter out US / International brokers if present
         loaded.removeWhere((b) => b.id == 'alpaca' || b.id == 'binance');
 
-        // Ensure MegaBull Demo Broker is present
-        if (!loaded.any((b) => b.id == 'megabull')) {
+        // Ensure MegaBull Demo Broker is present and CONNECTED by default for testing
+        final megabullIndex = loaded.indexWhere((b) => b.id == 'megabull');
+        if (megabullIndex >= 0) {
+          final existingMB = loaded[megabullIndex];
+          existingMB.status = BrokerStatus.connected;
+          if (existingMB.baseUrl.isEmpty) existingMB.baseUrl = 'https://api.megabull.in';
+          if (existingMB.apiKey.isEmpty) existingMB.apiKey = 'd35a226d-5b3a-44d7-a954-2db87bd069a7';
+          if (existingMB.apiSecret.isEmpty) existingMB.apiSecret = 'd35a226d-5b3a-44d7-a954-2db87bd069a7';
+          if (existingMB.accountId.isEmpty) existingMB.accountId = 'MB-DEMO-99';
+        } else {
           loaded.insert(
             0,
             BrokerAccount(

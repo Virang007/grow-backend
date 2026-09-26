@@ -72,11 +72,30 @@ class Stock {
     final double highPrice = (json['high'] as num?)?.toDouble() ?? currentPrice * 1.02;
     final double lowPrice = (json['low'] as num?)?.toDouble() ?? currentPrice * 0.98;
 
+    final String parsedToken = (json['instrumentToken'] ??
+            json['instrument_token'] ??
+            json['token'] ??
+            json['scriptId'] ??
+            json['script_id'] ??
+            json['securityId'] ??
+            json['security_id'] ??
+            json['id'] ??
+            '')
+        .toString();
+
+    final String parsedSymbol = (json['tradingSymbol'] ??
+            json['trading_symbol'] ??
+            json['symbol'] ??
+            json['scriptName'] ??
+            json['displaySymbol'] ??
+            '')
+        .toString();
+
     return Stock(
-      instrumentToken: json['instrumentToken'] ?? json['token'] ?? json['symbol'] ?? '',
-      symbol: json['symbol'] ?? json['tradingSymbol'] ?? '',
-      name: json['name'] ?? json['companyName'] ?? json['symbol'] ?? '',
-      exchange: json['exchange'] ?? 'NSE',
+      instrumentToken: parsedToken.isNotEmpty ? parsedToken : parsedSymbol,
+      symbol: parsedSymbol,
+      name: (json['name'] ?? json['companyName'] ?? parsedSymbol).toString(),
+      exchange: (json['exchange'] ?? 'NSE').toString(),
       price: currentPrice,
       change: (json['change'] as num?)?.toDouble() ?? 0.0,
       percentChange: (json['percentChange'] as num?)?.toDouble() ?? 0.0,
@@ -85,7 +104,7 @@ class Stock {
       low: lowPrice,
       swingHigh: (json['swingHigh'] as num?)?.toDouble() ?? highPrice * 1.015,
       swingLow: (json['swingLow'] as num?)?.toDouble() ?? lowPrice * 0.985,
-      marketCap: json['marketCap'] ?? '₹1,50,000 Cr',
+      marketCap: (json['marketCap'] ?? '₹1,50,000 Cr').toString(),
       peRatio: (json['peRatio'] as num?)?.toDouble() ?? 24.5,
       volume: (json['volume'] as num?)?.toDouble() ?? 1000000.0,
       chartData: (json['chartData'] as List<dynamic>?)

@@ -58,30 +58,35 @@ class OrderItem {
   }
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
+    // MegaBull API uses: id, instrumentToken, instrumentName, qty, type, orderType, price, triggerPrice, status
+    final rawType = json['transactionType'] ?? json['type'] ?? 'BUY';
+    final rawOrderType = json['orderType'] ?? json['executionType'] ?? 'LIMIT';
     return OrderItem(
-      orderId: json['orderId'] ?? json['id'] ?? '',
-      instrumentToken: json['instrumentToken'] ?? json['token'] ?? '',
-      symbol: json['symbol'] ?? json['tradingSymbol'] ?? '',
-      name: json['name'] ?? json['companyName'] ?? json['symbol'] ?? '',
+      orderId: (json['id'] ?? json['orderId'] ?? json['order_id'] ?? '').toString(),
+      instrumentToken: (json['instrumentToken'] ?? json['token'] ?? '').toString(),
+      symbol: json['symbol'] ?? json['tradingSymbol'] ?? json['instrumentName'] ?? '',
+      name: json['instrumentName'] ?? json['name'] ?? json['companyName'] ?? json['symbol'] ?? '',
       transactionType: OrderTransactionType.values.firstWhere(
-        (e) => e.name == json['transactionType'],
+        (e) => e.name.toUpperCase() == rawType.toString().toUpperCase(),
         orElse: () => OrderTransactionType.BUY,
       ),
       orderType: OrderType.values.firstWhere(
-        (e) => e.name == json['orderType'],
-        orElse: () => OrderType.MARKET,
+        (e) => e.name.toUpperCase() == rawOrderType.toString().toUpperCase(),
+        orElse: () => OrderType.LIMIT,
       ),
-      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      quantity: (json['qty'] as num?)?.toInt() ?? (json['quantity'] as num?)?.toInt() ?? 1,
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       triggerPrice: (json['triggerPrice'] as num?)?.toDouble() ?? 0.0,
       status: OrderStatus.values.firstWhere(
-        (e) => e.name == json['status'],
-        orElse: () => OrderStatus.EXECUTED,
+        (e) => e.name.toUpperCase() == (json['status'] ?? '').toString().toUpperCase(),
+        orElse: () => OrderStatus.PENDING,
       ),
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp']) ?? DateTime.now()
-          : DateTime.now(),
-      failureReason: json['failureReason'],
+      timestamp: json['createdTimestamp'] != null
+          ? DateTime.tryParse(json['createdTimestamp']) ?? DateTime.now()
+          : json['timestamp'] != null
+              ? DateTime.tryParse(json['timestamp']) ?? DateTime.now()
+              : DateTime.now(),
+      failureReason: json['failureReason'] ?? json['msg'],
     );
   }
 }

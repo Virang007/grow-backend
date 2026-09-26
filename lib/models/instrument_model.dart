@@ -58,11 +58,30 @@ class Instrument {
   }
 
   factory Instrument.fromJson(Map<String, dynamic> json) {
+    final String parsedToken = (json['instrumentToken'] ??
+            json['instrument_token'] ??
+            json['token'] ??
+            json['scriptId'] ??
+            json['script_id'] ??
+            json['securityId'] ??
+            json['security_id'] ??
+            json['id'] ??
+            '')
+        .toString();
+
+    final String parsedSymbol = (json['tradingSymbol'] ??
+            json['trading_symbol'] ??
+            json['symbol'] ??
+            json['scriptName'] ??
+            json['displaySymbol'] ??
+            '')
+        .toString();
+
     return Instrument(
-      instrumentToken: json['instrumentToken'] ?? json['token'] ?? json['symbol'] ?? '',
-      symbol: json['symbol'] ?? json['tradingSymbol'] ?? '',
-      name: json['name'] ?? json['companyName'] ?? json['symbol'] ?? '',
-      exchange: json['exchange'] ?? 'NSE',
+      instrumentToken: parsedToken.isNotEmpty ? parsedToken : parsedSymbol,
+      symbol: parsedSymbol,
+      name: (json['name'] ?? json['companyName'] ?? parsedSymbol).toString(),
+      exchange: (json['exchange'] ?? 'NSE').toString(),
       price: (json['price'] as num?)?.toDouble() ??
           (json['lastPrice'] as num?)?.toDouble() ??
           0.0,
@@ -71,7 +90,7 @@ class Instrument {
       open: (json['open'] as num?)?.toDouble() ?? 0.0,
       high: (json['high'] as num?)?.toDouble() ?? 0.0,
       low: (json['low'] as num?)?.toDouble() ?? 0.0,
-      marketCap: json['marketCap'] ?? '₹1,50,000 Cr',
+      marketCap: (json['marketCap'] ?? '₹1,50,000 Cr').toString(),
       peRatio: (json['peRatio'] as num?)?.toDouble() ?? 24.5,
       volume: (json['volume'] as num?)?.toDouble() ?? 1000000.0,
       chartData: (json['chartData'] as List<dynamic>?)

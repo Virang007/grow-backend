@@ -285,8 +285,8 @@ class _RiskManagementViewState extends State<RiskManagementView> {
                       ? null
                       : () async {
                           final success = await controller.confirmAndPlaceOrder();
-                          if (success) {
-                            Get.back();
+                          if (success && context.mounted) {
+                            Get.back(); // go back after dialog is dismissed
                           }
                         },
                   style: ElevatedButton.styleFrom(

@@ -10,6 +10,7 @@ import '../services/megabull_broker_service.dart';
 import '../services/dhan_broker_service.dart';
 import '../controllers/broker_controller.dart';
 import '../controllers/order_controller.dart';
+import '../widgets/order_success_dialog.dart';
 
 class RiskManagementController extends GetxController {
   late Stock stock;
@@ -62,7 +63,8 @@ class RiskManagementController extends GetxController {
 
   void recalculate() {
     final double entry = double.tryParse(entryController.text) ?? stock.price;
-    final int qty = int.tryParse(quantityController.text) ?? 10;
+    final int parsedQty = int.tryParse(quantityController.text) ?? 1;
+    final int qty = parsedQty > 0 ? parsedQty : 1;
     double sl = double.tryParse(stopLossController.text) ?? (tradeSide == TradeSide.BUY ? entry * 0.98 : entry * 1.02);
 
     double tp = 0.0;
@@ -121,9 +123,11 @@ class RiskManagementController extends GetxController {
   Future<bool> confirmAndPlaceOrder() async {
     final calc = calculation.value;
     if (calc == null || !calc.isValid) {
+      final err = calc?.validationError ?? 'Please check your Entry, Stop Loss, and Target values.';
+      print('[RISK CONTROLLER ERROR] Invalid risk parameters: $err');
       Get.snackbar(
         'Invalid Risk Parameters',
-        calc?.validationError ?? 'Please check your Entry, Stop Loss, and Target values.',
+        err,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: const Color(0xFFEF4444),
         colorText: Colors.white,
@@ -132,6 +136,7 @@ class RiskManagementController extends GetxController {
     }
 
     isSubmitting.value = true;
+    print('[RISK CONTROLLER] Processing order confirmation for ${stock.symbol} ${tradeSide.name}');
 
     // Get active broker implementation
     final BrokerController brokerController = Get.find<BrokerController>();
@@ -139,6 +144,8 @@ class RiskManagementController extends GetxController {
       (b) => b.status.name == 'connected',
       orElse: () => brokerController.brokers.first,
     );
+
+    print('[RISK CONTROLLER] Active broker selected: ${activeBroker.name} (${activeBroker.id})');
 
     BrokerService brokerService;
     if (activeBroker.id == 'dhan') {
@@ -166,6 +173,7 @@ class RiskManagementController extends GetxController {
     isSubmitting.value = false;
 
     if (result.isSuccess) {
+      print('[RISK CONTROLLER SUCCESS] Broker order placed successfully: OrderID=${result.orderId}');
       // Save order to history
       final OrderController orderController = Get.find<OrderController>();
       orderController.orders.insert(
@@ -180,28 +188,33 @@ class RiskManagementController extends GetxController {
           quantity: calc.quantity,
           price: calc.entryPrice,
           triggerPrice: calc.stopLoss,
-          status: OrderStatus.EXECUTED,
+          status: OrderStatus.PENDING,
           timestamp: DateTime.now(),
         ),
       );
 
-      Get.snackbar(
-        'Order Placed with Broker!',
-        result.message,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xFF10B981),
-        colorText: Colors.white,
-        duration: const Duration(seconds: 4),
-      );
+      // Show premium success dialog
+      final context = Get.context;
+      if (context != null && context.mounted) {
+        await OrderSuccessDialog.show(
+          context: context,
+          result: result,
+          calculation: calc,
+          stock: stock,
+          tradeSide: tradeSide,
+        );
+      }
 
       return true;
     } else {
+      print('[RISK CONTROLLER ERROR] Broker rejected order: ${result.message}');
       Get.snackbar(
-        'Broker Order Rejected',
+        'Broker Order Failed',
         result.message,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: const Color(0xFFEF4444),
         colorText: Colors.white,
+        duration: const Duration(seconds: 5),
       );
       return false;
     }

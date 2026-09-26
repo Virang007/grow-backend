@@ -125,8 +125,9 @@ class _OrderFormViewState extends State<OrderFormView> {
             ),
             const SizedBox(height: 20),
 
-            // Available Virtual Balance
+            // Available Balance from API
             Obx(() {
+              final bal = portfolioController.virtualBalance.value;
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -138,13 +139,13 @@ class _OrderFormViewState extends State<OrderFormView> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Available Virtual Cash:',
+                      'Available Balance:',
                       style: TextStyle(color: Colors.grey[400], fontSize: 13),
                     ),
                     Text(
-                      '₹${portfolioController.virtualBalance.value.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Color(0xFF10B981),
+                      bal != null ? '₹${bal.toStringAsFixed(2)}' : 'Balance unavailable',
+                      style: TextStyle(
+                        color: bal != null ? const Color(0xFF10B981) : Colors.grey,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
