@@ -20,93 +20,219 @@ class RiskManagementController extends GetxController {
   final TextEditingController quantityController = TextEditingController(text: '10');
   final TextEditingController stopLossController = TextEditingController();
   final TextEditingController targetController = TextEditingController();
+  final TextEditingController bufferController = TextEditingController(text: '2.00');
 
   final Rx<RiskMethod> selectedMethod = RiskMethod.RR_1_2.obs;
   final RxBool isSubmitting = false.obs;
-
   final Rxn<RiskCalculation> calculation = Rxn<RiskCalculation>();
 
+  // ─────────────────────────────────────────────
+  // INITIALIZE
+  // ─────────────────────────────────────────────
   void initialize(Stock selectedStock, TradeSide side) {
     stock = selectedStock;
     tradeSide = side;
 
-    entryController.text = stock.price.toStringAsFixed(2);
+    final double price = stock.price;
+    entryController.text = price.toStringAsFixed(2);
     quantityController.text = '10';
 
-    // Set initial SL based on trade direction
-    if (tradeSide == TradeSide.BUY) {
-      final double defaultSl = stock.price * 0.98; // 2% risk by default
-      stopLossController.text = defaultSl.toStringAsFixed(2);
-    } else {
-      final double defaultSl = stock.price * 1.02; // 2% risk by default
-      stopLossController.text = defaultSl.toStringAsFixed(2);
-    }
-
+    // Default SL: 2% below entry for BUY, 2% above for SELL
+    _applyDefaultSL(price);
     recalculate();
   }
 
+  void _applyDefaultSL(double entry) {
+    if (tradeSide == TradeSide.BUY) {
+      stopLossController.text = (entry * 0.98).toStringAsFixed(2);
+    } else {
+      stopLossController.text = (entry * 1.02).toStringAsFixed(2);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // SET RISK METHOD (chip tap)
+  // ─────────────────────────────────────────────
   void setRiskMethod(RiskMethod method) {
     selectedMethod.value = method;
-
     final double entry = double.tryParse(entryController.text) ?? stock.price;
+    final double buffer = double.tryParse(bufferController.text) ?? 2.0;
 
-    if (method == RiskMethod.SWING_LOW) {
-      final double swingLowPrice = stock.swingLow > 0 ? stock.swingLow : entry * 0.97;
-      stopLossController.text = swingLowPrice.toStringAsFixed(2);
-    } else if (method == RiskMethod.SWING_HIGH) {
-      final double swingHighPrice = stock.swingHigh > 0 ? stock.swingHigh : entry * 1.03;
-      stopLossController.text = swingHighPrice.toStringAsFixed(2);
+    switch (method) {
+      case RiskMethod.SWING_LOW:
+        // BUY: SL = swing low (must be below entry)
+        final double rawSwingLow = stock.swingLow > 0 ? stock.swingLow : entry * 0.97;
+        if (rawSwingLow >= entry) {
+          stopLossController.text = (entry * 0.97).toStringAsFixed(2);
+          _showMethodWarning('Swing Low (₹${rawSwingLow.toStringAsFixed(2)}) is not below entry. Using 3% default SL.');
+        } else {
+          stopLossController.text = rawSwingLow.toStringAsFixed(2);
+        }
+        break;
+
+      case RiskMethod.SWING_HIGH:
+        // SELL: SL = swing high (must be above entry)
+        final double rawSwingHigh = stock.swingHigh > 0 ? stock.swingHigh : entry * 1.03;
+        if (rawSwingHigh <= entry) {
+          stopLossController.text = (entry * 1.03).toStringAsFixed(2);
+          _showMethodWarning('Swing High (₹${rawSwingHigh.toStringAsFixed(2)}) is not above entry. Using 3% default SL.');
+        } else {
+          stopLossController.text = rawSwingHigh.toStringAsFixed(2);
+        }
+        break;
+
+      case RiskMethod.PREV_CANDLE:
+        // BUY: Previous Candle Low - Buffer
+        // SELL: Previous Candle High + Buffer
+        if (tradeSide == TradeSide.BUY) {
+          final double baseLow = stock.low > 0 ? stock.low : entry * 0.98;
+          final double slVal = baseLow - buffer;
+          if (slVal >= entry) {
+            stopLossController.text = (entry - buffer).toStringAsFixed(2);
+          } else {
+            stopLossController.text = slVal.toStringAsFixed(2);
+          }
+        } else {
+          final double baseHigh = stock.high > 0 ? stock.high : entry * 1.02;
+          final double slVal = baseHigh + buffer;
+          if (slVal <= entry) {
+            stopLossController.text = (entry + buffer).toStringAsFixed(2);
+          } else {
+            stopLossController.text = slVal.toStringAsFixed(2);
+          }
+        }
+        break;
+
+      case RiskMethod.CUSTOM:
+        // Keep existing SL — user will edit manually
+        break;
+
+      default:
+        // RR_1_1, RR_1_2, RR_1_3 — keep current SL, only TP changes
+        break;
     }
 
     recalculate();
   }
 
+  void _showMethodWarning(String msg) {
+    Get.snackbar(
+      'Method Warning',
+      msg,
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: const Color(0xFFF59E0B),
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(12),
+      borderRadius: 10,
+      icon: const Icon(Icons.warning_amber, color: Colors.white),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // RECALCULATE SL / TP
+  // ─────────────────────────────────────────────
   void recalculate() {
     final double entry = double.tryParse(entryController.text) ?? stock.price;
-    final int parsedQty = int.tryParse(quantityController.text) ?? 1;
-    final int qty = parsedQty > 0 ? parsedQty : 1;
-    double sl = double.tryParse(stopLossController.text) ?? (tradeSide == TradeSide.BUY ? entry * 0.98 : entry * 1.02);
+    final int qty = _parseQty();
+    double sl = double.tryParse(stopLossController.text) ?? _defaultSL(entry);
+    final RiskMethod method = selectedMethod.value;
 
-    double tp = 0.0;
-
-    if (tradeSide == TradeSide.BUY) {
-      final double riskPerShare = entry > sl ? entry - sl : 0.0;
-      switch (selectedMethod.value) {
-        case RiskMethod.RR_1_1:
-          tp = entry + riskPerShare;
-          break;
-        case RiskMethod.RR_1_2:
-        case RiskMethod.SWING_LOW:
-          tp = entry + (riskPerShare * 2.0);
-          break;
-        case RiskMethod.RR_1_3:
-          tp = entry + (riskPerShare * 3.0);
-          break;
-        default:
-          tp = double.tryParse(targetController.text) ?? entry + (riskPerShare * 2.0);
-          break;
-      }
-    } else {
-      // SELL / SHORT
-      final double riskPerShare = sl > entry ? sl - entry : 0.0;
-      switch (selectedMethod.value) {
-        case RiskMethod.RR_1_1:
-          tp = entry - riskPerShare;
-          break;
-        case RiskMethod.RR_1_2:
-        case RiskMethod.SWING_HIGH:
-          tp = entry - (riskPerShare * 2.0);
-          break;
-        case RiskMethod.RR_1_3:
-          tp = entry - (riskPerShare * 3.0);
-          break;
-        default:
-          tp = double.tryParse(targetController.text) ?? entry - (riskPerShare * 2.0);
-          break;
+    // ── Validate SL direction ──────────────────────────
+    // Auto-correct only when using a non-custom method
+    if (method != RiskMethod.CUSTOM) {
+      if (tradeSide == TradeSide.BUY && sl >= entry) {
+        // SL must be below entry for BUY
+        sl = entry * 0.98;
+        stopLossController.text = sl.toStringAsFixed(2);
+      } else if (tradeSide == TradeSide.SELL && sl <= entry) {
+        // SL must be above entry for SELL
+        sl = entry * 1.02;
+        stopLossController.text = sl.toStringAsFixed(2);
       }
     }
 
-    if (selectedMethod.value != RiskMethod.CUSTOM) {
+    // ── Compute risk per share ─────────────────────────
+    final double riskPerShare = tradeSide == TradeSide.BUY
+        ? (entry > sl ? entry - sl : 0.0)
+        : (sl > entry ? sl - entry : 0.0);
+
+    // Guard: no risk = no valid trade
+    if (riskPerShare <= 0 && method != RiskMethod.CUSTOM) {
+      calculation.value = RiskCalculation(
+        tradeSide: tradeSide,
+        entryPrice: entry,
+        stopLoss: sl,
+        targetPrice: entry, // TP = Entry = invalid, will show error
+        quantity: qty,
+        riskMethod: method,
+      );
+      return;
+    }
+
+    // ── Compute target price ───────────────────────────
+    double tp;
+
+    if (tradeSide == TradeSide.BUY) {
+      switch (method) {
+        case RiskMethod.RR_1_1:
+          tp = entry + riskPerShare * 1.0; // 1:1 — reward = risk
+          break;
+        case RiskMethod.RR_1_2:
+          tp = entry + riskPerShare * 2.0; // 1:2 — reward = 2× risk
+          break;
+        case RiskMethod.RR_1_3:
+          tp = entry + riskPerShare * 3.0; // 1:3 — reward = 3× risk
+          break;
+        case RiskMethod.SWING_LOW:
+          // BUY Swing: SL = swing low, TP = entry + 2× risk (1:2)
+          tp = entry + riskPerShare * 2.0;
+          break;
+        case RiskMethod.CUSTOM:
+          // User sets TP manually — just read field or fallback 1:2
+          tp = double.tryParse(targetController.text) ?? entry + riskPerShare * 2.0;
+          break;
+        default:
+          tp = entry + riskPerShare * 2.0;
+      }
+    } else {
+      // ── SELL / SHORT ───────────────────────────────
+      // Entry > SL is WRONG for SELL — SL is ABOVE entry
+      // TP is BELOW entry
+      switch (method) {
+        case RiskMethod.RR_1_1:
+          tp = entry - riskPerShare * 1.0; // Price drops by risk amount
+          break;
+        case RiskMethod.RR_1_2:
+          tp = entry - riskPerShare * 2.0;
+          break;
+        case RiskMethod.RR_1_3:
+          tp = entry - riskPerShare * 3.0;
+          break;
+        case RiskMethod.SWING_HIGH:
+          // SELL Swing: SL = swing high (above entry), TP = entry - 2× risk
+          tp = entry - riskPerShare * 2.0;
+          break;
+        case RiskMethod.CUSTOM:
+          tp = double.tryParse(targetController.text) ?? entry - riskPerShare * 2.0;
+          break;
+        default:
+          tp = entry - riskPerShare * 2.0;
+      }
+    }
+
+    // ── Guard TP on wrong side ─────────────────────────
+    if (tradeSide == TradeSide.BUY && tp <= entry && method != RiskMethod.CUSTOM) {
+      tp = entry + riskPerShare * 2.0; // Force valid
+    }
+    if (tradeSide == TradeSide.SELL && tp >= entry && method != RiskMethod.CUSTOM) {
+      tp = entry - riskPerShare * 2.0; // Force valid
+    }
+    // Guard: TP must be > 0
+    if (tp <= 0) tp = entry * 0.5;
+
+    // ── Update target field (except CUSTOM) ────────────
+    if (method != RiskMethod.CUSTOM) {
       targetController.text = tp.toStringAsFixed(2);
     }
 
@@ -116,10 +242,22 @@ class RiskManagementController extends GetxController {
       stopLoss: sl,
       targetPrice: tp,
       quantity: qty,
-      riskMethod: selectedMethod.value,
+      riskMethod: method,
     );
   }
 
+  int _parseQty() {
+    final int parsed = int.tryParse(quantityController.text) ?? 1;
+    return parsed > 0 ? parsed : 1;
+  }
+
+  double _defaultSL(double entry) {
+    return tradeSide == TradeSide.BUY ? entry * 0.98 : entry * 1.02;
+  }
+
+  // ─────────────────────────────────────────────
+  // CONFIRM & PLACE ORDER
+  // ─────────────────────────────────────────────
   Future<bool> confirmAndPlaceOrder() async {
     final calc = calculation.value;
     if (calc == null || !calc.isValid) {
@@ -131,21 +269,24 @@ class RiskManagementController extends GetxController {
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: const Color(0xFFEF4444),
         colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(12),
+        borderRadius: 10,
+        icon: const Icon(Icons.error_outline, color: Colors.white),
       );
       return false;
     }
 
     isSubmitting.value = true;
-    print('[RISK CONTROLLER] Processing order confirmation for ${stock.symbol} ${tradeSide.name}');
+    print('[RISK CONTROLLER] Processing order: ${stock.symbol} ${tradeSide.name}');
+    print('[RISK CONTROLLER] Entry=₹${calc.entryPrice} | SL=₹${calc.stopLoss} | TP=₹${calc.targetPrice} | Qty=${calc.quantity} | Method=${calc.riskMethod.name}');
 
-    // Get active broker implementation
     final BrokerController brokerController = Get.find<BrokerController>();
     final activeBroker = brokerController.brokers.firstWhere(
       (b) => b.status.name == 'connected',
       orElse: () => brokerController.brokers.first,
     );
-
-    print('[RISK CONTROLLER] Active broker selected: ${activeBroker.name} (${activeBroker.id})');
+    print('[RISK CONTROLLER] Active broker: ${activeBroker.name} (${activeBroker.id})');
 
     BrokerService brokerService;
     if (activeBroker.id == 'dhan') {
@@ -169,52 +310,49 @@ class RiskManagementController extends GetxController {
     );
 
     final OrderResult result = await brokerService.placeRiskManagedOrder(request);
-
     isSubmitting.value = false;
 
     if (result.isSuccess) {
-      print('[RISK CONTROLLER SUCCESS] Broker order placed successfully: OrderID=${result.orderId}');
-      // Save order to history
-      final OrderController orderController = Get.find<OrderController>();
-      orderController.orders.insert(
-        0,
-        OrderItem(
-          orderId: result.orderId,
-          instrumentToken: stock.instrumentToken,
-          symbol: stock.symbol,
-          name: stock.name,
-          transactionType: tradeSide == TradeSide.BUY ? OrderTransactionType.BUY : OrderTransactionType.SELL,
-          orderType: OrderType.LIMIT,
-          quantity: calc.quantity,
-          price: calc.entryPrice,
-          triggerPrice: calc.stopLoss,
-          status: OrderStatus.PENDING,
-          timestamp: DateTime.now(),
-        ),
-      );
+      print('[RISK CONTROLLER SUCCESS] OrderID=${result.orderId}');
 
-      // Show premium success dialog
-      final context = Get.context;
-      if (context != null && context.mounted) {
+      final OrderController orderController = Get.find<OrderController>();
+      orderController.orders.insert(0, OrderItem(
+        orderId: result.orderId,
+        instrumentToken: stock.instrumentToken,
+        symbol: stock.symbol,
+        name: stock.name,
+        transactionType: tradeSide == TradeSide.BUY ? OrderTransactionType.BUY : OrderTransactionType.SELL,
+        orderType: OrderType.LIMIT,
+        quantity: calc.quantity,
+        price: calc.entryPrice,
+        triggerPrice: calc.stopLoss,
+        status: OrderStatus.PENDING,
+        timestamp: DateTime.now(),
+      ));
+
+      final ctx = Get.context;
+      if (ctx != null && ctx.mounted) {
         await OrderSuccessDialog.show(
-          context: context,
+          context: ctx,
           result: result,
           calculation: calc,
           stock: stock,
           tradeSide: tradeSide,
         );
       }
-
       return true;
     } else {
-      print('[RISK CONTROLLER ERROR] Broker rejected order: ${result.message}');
+      print('[RISK CONTROLLER ERROR] Broker rejected: ${result.message}');
       Get.snackbar(
-        'Broker Order Failed',
+        'Order Rejected by Broker',
         result.message,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: const Color(0xFFEF4444),
         colorText: Colors.white,
         duration: const Duration(seconds: 5),
+        margin: const EdgeInsets.all(12),
+        borderRadius: 10,
+        icon: const Icon(Icons.cancel_outlined, color: Colors.white),
       );
       return false;
     }

@@ -1,5 +1,5 @@
 enum TradeSide { BUY, SELL }
-enum RiskMethod { RR_1_1, RR_1_2, RR_1_3, SWING_LOW, SWING_HIGH, CUSTOM }
+enum RiskMethod { RR_1_1, RR_1_2, RR_1_3, SWING_LOW, SWING_HIGH, PREV_CANDLE, CUSTOM }
 
 class RiskCalculation {
   final TradeSide tradeSide;

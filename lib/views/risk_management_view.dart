@@ -149,23 +149,65 @@ class _RiskManagementViewState extends State<RiskManagementView> {
             ),
             const SizedBox(height: 8),
 
-            // Risk Method Options (1:1, 1:2, 1:3, Swing Low/High)
+            // Risk Method Options (1:1, 1:2, 1:3, Swing Low/High, Prev Candle)
             Obx(() {
               final activeMethod = controller.selectedMethod.value;
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              final double candleVal = isBuy ? widget.stock.low : widget.stock.high;
+              final String labelText = isBuy
+                  ? 'Prev Low (₹${candleVal.toStringAsFixed(2)})'
+                  : 'Prev High (₹${candleVal.toStringAsFixed(2)})';
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildMethodChip('1 : 1', RiskMethod.RR_1_1, activeMethod),
-                  _buildMethodChip('1 : 2 (Recommended)', RiskMethod.RR_1_2, activeMethod),
-                  _buildMethodChip('1 : 3', RiskMethod.RR_1_3, activeMethod),
-                  if (isBuy)
-                    _buildMethodChip('Swing Low (₹${widget.stock.swingLow.toStringAsFixed(2)})',
-                        RiskMethod.SWING_LOW, activeMethod)
-                  else
-                    _buildMethodChip('Swing High (₹${widget.stock.swingHigh.toStringAsFixed(2)})',
-                        RiskMethod.SWING_HIGH, activeMethod),
-                  _buildMethodChip('Custom', RiskMethod.CUSTOM, activeMethod),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildMethodChip('1 : 1', RiskMethod.RR_1_1, activeMethod),
+                      _buildMethodChip('1 : 2 (Recommended)', RiskMethod.RR_1_2, activeMethod),
+                      _buildMethodChip('1 : 3', RiskMethod.RR_1_3, activeMethod),
+                      if (isBuy)
+                        _buildMethodChip('Swing Low (₹${widget.stock.swingLow.toStringAsFixed(2)})',
+                            RiskMethod.SWING_LOW, activeMethod)
+                      else
+                        _buildMethodChip('Swing High (₹${widget.stock.swingHigh.toStringAsFixed(2)})',
+                            RiskMethod.SWING_HIGH, activeMethod),
+                      _buildMethodChip(labelText, RiskMethod.PREV_CANDLE, activeMethod),
+                      _buildMethodChip('Custom', RiskMethod.CUSTOM, activeMethod),
+                    ],
+                  ),
+                  if (activeMethod == RiskMethod.PREV_CANDLE) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInputField(
+                            controller: controller.bufferController,
+                            label: 'SL Buffer (₹)',
+                            onChanged: (_) => controller.setRiskMethod(RiskMethod.PREV_CANDLE),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF161B22),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[800]!),
+                            ),
+                            child: Text(
+                              isBuy
+                                  ? 'SL = Prev Low - Buffer'
+                                  : 'SL = Prev High + Buffer',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               );
             }),
