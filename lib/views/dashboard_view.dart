@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../controllers/broker_controller.dart';
 import '../controllers/watchlist_controller.dart';
 import '../controllers/portfolio_controller.dart';
+import '../controllers/home_controller.dart';
 import '../models/stock_model.dart';
 import 'search_view.dart';
 import 'stock_detail_view.dart';
@@ -25,9 +26,10 @@ class _DashboardViewState extends State<DashboardView> {
     final BrokerController brokerController = Get.find<BrokerController>();
     final WatchlistController watchlistController = Get.find<WatchlistController>();
     final PortfolioController portfolioController = Get.find<PortfolioController>();
+    final HomeController homeController = Get.find<HomeController>();
 
     final List<Widget> pages = [
-      _buildHomeDashboard(context, brokerController, watchlistController, portfolioController),
+      _buildHomeDashboard(context, brokerController, homeController, watchlistController),
       _buildWatchlistView(watchlistController),
       const OrdersView(),
       const PortfolioView(),
@@ -60,9 +62,9 @@ class _DashboardViewState extends State<DashboardView> {
           elevation: 0,
           items: [
             const BottomNavigationBarItem(
-              icon: Icon(Icons.shield_outlined),
-              activeIcon: Icon(Icons.shield, color: Color(0xFF2563EB)),
-              label: 'Risk Manage',
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home, color: Color(0xFF2563EB)),
+              label: 'Home',
             ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.bookmark_outline),
@@ -109,14 +111,14 @@ class _DashboardViewState extends State<DashboardView> {
   Widget _buildHomeDashboard(
     BuildContext context,
     BrokerController brokerController,
+    HomeController homeController,
     WatchlistController watchlistController,
-    PortfolioController portfolioController,
   ) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: watchlistController.loadWatchlist,
+          onRefresh: homeController.loadMarketStocks,
           color: const Color(0xFF2563EB),
           backgroundColor: const Color(0xFF1E222D),
           child: CustomScrollView(
@@ -132,17 +134,17 @@ class _DashboardViewState extends State<DashboardView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Risk Management App',
+                            'Home',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 26,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Indian Stock Market Order Entry & SL/TP Calculator',
+                            'Indian Stock Market Shares & SL/TP Calculator',
                             style: TextStyle(color: Colors.grey[400], fontSize: 12),
                           ),
                         ],
@@ -246,63 +248,112 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
 
-              // Market Indices Ribbon — real data only when connected
+              // Live Market Indices Ribbon (NIFTY 50, SENSEX, BANK NIFTY)
               SliverToBoxAdapter(
-                child: Obx(() {
-                  final count = brokerController.connectedCount.value;
-                  if (count == 0) {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF161B22),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF2A2E39)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.show_chart, color: Colors.grey[600], size: 18),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Connect a broker to view live NIFTY / SENSEX indices',
-                            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                child: SizedBox(
+                  height: 96,
+                  child: Obx(() {
+                    if (homeController.isIndicesLoading.value && homeController.marketIndices.isEmpty) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161B22),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF2A2E39)),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Loading live market indices...',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      itemCount: homeController.marketIndices.length,
+                      itemBuilder: (context, index) {
+                        final idx = homeController.marketIndices[index];
+                        final bool isPositive = idx.change >= 0;
+                        final Color color = isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+
+                        String cleanName = idx.symbol.replaceAll('^', '');
+                        if (cleanName == 'NSEI') cleanName = 'NIFTY 50';
+                        if (cleanName == 'BSESN') cleanName = 'SENSEX';
+                        if (cleanName == 'NSEBANK') cleanName = 'BANK NIFTY';
+
+                        return Container(
+                          width: 160,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161B22),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF2A2E39)),
                           ),
-                        ],
-                      ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    cleanName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  Icon(
+                                    isPositive ? Icons.trending_up : Icons.trending_down,
+                                    color: color,
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '₹${idx.price.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                '${isPositive ? "+" : ""}${idx.change.toStringAsFixed(2)} (${isPositive ? "+" : ""}${idx.percentChange.toStringAsFixed(2)}%)',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     );
-                  }
-                  // When broker is connected, indices can be loaded from the broker API
-                  // For now show a loading placeholder until index API is wired up
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161B22),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF2A2E39)),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: Color(0xFF2563EB),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Loading live index data...',
-                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                  }),
+                ),
               ),
 
-              // Watchlist Section Title
+              // Market Stocks Section Title
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -310,7 +361,7 @@ class _DashboardViewState extends State<DashboardView> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Watchlist (NSE/BSE)',
+                        'Market Stocks (NSE Shares)',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 17,
@@ -319,7 +370,7 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                       Obx(() {
                         return Text(
-                          '${watchlistController.watchlist.length} Saved',
+                          '${homeController.marketStocks.length} Shares',
                           style: TextStyle(color: Colors.grey[400], fontSize: 12),
                         );
                       }),
@@ -328,9 +379,9 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
 
-              // Watchlist List
+              // Live Market Stocks Feed
               Obx(() {
-                if (watchlistController.isLoading.value) {
+                if (homeController.isLoading.value && homeController.marketStocks.isEmpty) {
                   return const SliverToBoxAdapter(
                     child: Center(
                       child: Padding(
@@ -341,7 +392,7 @@ class _DashboardViewState extends State<DashboardView> {
                   );
                 }
 
-                if (watchlistController.watchlist.isEmpty) {
+                if (homeController.marketStocks.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Container(
                       margin: const EdgeInsets.all(16),
@@ -353,11 +404,10 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                       child: Column(
                         children: [
-                          Icon(Icons.bookmark_outline,
-                              size: 44, color: Colors.grey[600]),
+                          Icon(Icons.show_chart, size: 44, color: Colors.grey[600]),
                           const SizedBox(height: 12),
                           const Text(
-                            'Your Watchlist is Empty',
+                            'No Market Data Loaded',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -366,7 +416,7 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Tap the search bar above to search for Indian stocks (e.g. RELIANCE, TCS, INFY) and open Risk Management.',
+                            'Tap the search bar above to search for any Indian stock share (e.g. RELIANCE, TCS, INFY).',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey[400], fontSize: 12),
                           ),
@@ -379,10 +429,10 @@ class _DashboardViewState extends State<DashboardView> {
                 return SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final stock = watchlistController.watchlist[index];
+                      final stock = homeController.marketStocks[index];
                       return _buildStockTile(stock, watchlistController);
                     },
-                    childCount: watchlistController.watchlist.length,
+                    childCount: homeController.marketStocks.length,
                   ),
                 );
               }),

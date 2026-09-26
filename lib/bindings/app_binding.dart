@@ -4,6 +4,7 @@ import '../controllers/stock_search_controller.dart';
 import '../controllers/watchlist_controller.dart';
 import '../controllers/order_controller.dart';
 import '../controllers/portfolio_controller.dart';
+import '../controllers/home_controller.dart';
 
 class AppBinding extends Bindings {
   @override
@@ -13,5 +14,6 @@ class AppBinding extends Bindings {
     Get.put(WatchlistController());
     Get.put(OrderController());
     Get.put(PortfolioController());
+    Get.put(HomeController());
   }
 }

@@ -27,8 +27,8 @@ class StockService {
     String cleanSymbol = rawSymbol.trim().toUpperCase();
     if (cleanSymbol.isEmpty) return null;
 
-    // Default to NSE (.NS) if no exchange specified
-    if (!cleanSymbol.endsWith('.NS') && !cleanSymbol.endsWith('.BO')) {
+    // Default to NSE (.NS) if no exchange specified (except indices like ^NSEI)
+    if (!cleanSymbol.startsWith('^') && !cleanSymbol.endsWith('.NS') && !cleanSymbol.endsWith('.BO')) {
       cleanSymbol = '$cleanSymbol.NS';
     }
 
@@ -186,6 +186,12 @@ class StockService {
   static String _getIndianStockName(String symbol) {
     final clean = symbol.replaceAll('.NS', '').replaceAll('.BO', '');
     switch (clean) {
+      case '^NSEI':
+        return 'NIFTY 50 Index';
+      case '^BSESN':
+        return 'SENSEX Index';
+      case '^NSEBANK':
+        return 'NIFTY Bank Index';
       case 'RELIANCE':
         return 'Reliance Industries Ltd.';
       case 'TCS':
