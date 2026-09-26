@@ -76,7 +76,8 @@ class _StockDetailModalState extends State<StockDetailModal> {
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      stock.symbol.substring(0, stock.symbol.length > 3 ? 3 : stock.symbol.length),
+                      stock.displaySymbol.substring(
+                          0, stock.displaySymbol.length > 3 ? 3 : stock.displaySymbol.length),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -88,13 +89,34 @@ class _StockDetailModalState extends State<StockDetailModal> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        stock.symbol,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            stock.displaySymbol,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              stock.exchange,
+                              style: const TextStyle(
+                                color: Color(0xFF2563EB),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       Text(
                         stock.name,
@@ -124,13 +146,13 @@ class _StockDetailModalState extends State<StockDetailModal> {
           ),
           const SizedBox(height: 20),
 
-          // Price & Change
+          // Price & Change in INR (₹)
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                '\$${stock.price.toStringAsFixed(2)}',
+                '₹${stock.price.toStringAsFixed(2)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 32,
@@ -154,7 +176,7 @@ class _StockDetailModalState extends State<StockDetailModal> {
                       size: 20,
                     ),
                     Text(
-                      '${isPositive ? "+" : ""}${stock.change.toStringAsFixed(2)} (${isPositive ? "+" : ""}${stock.percentChange.toStringAsFixed(2)}%)',
+                      '${isPositive ? "+" : ""}₹${stock.change.toStringAsFixed(2)} (${isPositive ? "+" : ""}${stock.percentChange.toStringAsFixed(2)}%)',
                       style: TextStyle(
                         color: priceColor,
                         fontWeight: FontWeight.bold,
@@ -218,7 +240,7 @@ class _StockDetailModalState extends State<StockDetailModal> {
 
           // Key Statistics Grid
           const Text(
-            'Key Statistics',
+            'Key Market Statistics',
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -234,18 +256,18 @@ class _StockDetailModalState extends State<StockDetailModal> {
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
             children: [
-              _buildStatTile('Open', '\$${stock.open.toStringAsFixed(2)}'),
-              _buildStatTile('High', '\$${stock.high.toStringAsFixed(2)}'),
-              _buildStatTile('Low', '\$${stock.low.toStringAsFixed(2)}'),
+              _buildStatTile('Open', '₹${stock.open.toStringAsFixed(2)}'),
+              _buildStatTile('High', '₹${stock.high.toStringAsFixed(2)}'),
+              _buildStatTile('Low', '₹${stock.low.toStringAsFixed(2)}'),
               _buildStatTile('Market Cap', stock.marketCap),
               _buildStatTile('P/E Ratio', '${stock.peRatio}'),
               _buildStatTile(
-                  'Volume', '${(stock.volume / 1000000).toStringAsFixed(1)}M'),
+                  'Volume', '${(stock.volume / 100000).toStringAsFixed(1)}L'),
             ],
           ),
           const SizedBox(height: 24),
 
-          // Action Buttons: Buy / Sell
+          // Demo / Paper Trading Action Buttons (Virtual Money)
           Row(
             children: [
               Expanded(
@@ -254,7 +276,7 @@ class _StockDetailModalState extends State<StockDetailModal> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Buy order initiated for ${stock.symbol} at \$${stock.price.toStringAsFixed(2)}',
+                          'Demo Buy Order: 1 Share of ${stock.displaySymbol} at ₹${stock.price.toStringAsFixed(2)} (Virtual ₹)',
                         ),
                         backgroundColor: const Color(0xFF10B981),
                       ),
@@ -268,7 +290,7 @@ class _StockDetailModalState extends State<StockDetailModal> {
                     ),
                   ),
                   child: const Text(
-                    'BUY',
+                    'DEMO BUY',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -284,7 +306,7 @@ class _StockDetailModalState extends State<StockDetailModal> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Sell order initiated for ${stock.symbol} at \$${stock.price.toStringAsFixed(2)}',
+                          'Demo Sell Order: 1 Share of ${stock.displaySymbol} at ₹${stock.price.toStringAsFixed(2)} (Virtual ₹)',
                         ),
                         backgroundColor: const Color(0xFFEF4444),
                       ),
@@ -298,7 +320,7 @@ class _StockDetailModalState extends State<StockDetailModal> {
                     ),
                   ),
                   child: const Text(
-                    'SELL',
+                    'DEMO SELL',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

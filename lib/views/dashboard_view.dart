@@ -1,0 +1,565 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import '../controllers/broker_controller.dart';
+import '../controllers/watchlist_controller.dart';
+import '../controllers/portfolio_controller.dart';
+import '../models/stock_model.dart';
+import 'search_view.dart';
+import 'stock_detail_view.dart';
+import 'orders_view.dart';
+import 'portfolio_view.dart';
+import 'broker_settings_page.dart';
+
+class DashboardView extends StatefulWidget {
+  const DashboardView({super.key});
+
+  @override
+  State<DashboardView> createState() => _DashboardViewState();
+}
+
+class _DashboardViewState extends State<DashboardView> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final BrokerController brokerController = Get.find<BrokerController>();
+    final WatchlistController watchlistController = Get.find<WatchlistController>();
+    final PortfolioController portfolioController = Get.find<PortfolioController>();
+
+    final List<Widget> pages = [
+      _buildHomeDashboard(context, brokerController, watchlistController, portfolioController),
+      _buildWatchlistView(watchlistController),
+      const OrdersView(),
+      const PortfolioView(),
+      BrokerSettingsPage(onBrokersUpdated: brokerController.loadBrokers),
+    ];
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: pages,
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF161B22),
+          border: Border(top: BorderSide(color: Color(0xFF2A2E39), width: 1)),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          backgroundColor: const Color(0xFF161B22),
+          selectedItemColor: const Color(0xFF2563EB),
+          unselectedItemColor: Colors.grey[500],
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.shield_outlined),
+              activeIcon: Icon(Icons.shield, color: Color(0xFF2563EB)),
+              label: 'Risk Manage',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.bookmark_outline),
+              activeIcon: Icon(Icons.bookmark, color: Color(0xFF2563EB)),
+              label: 'Watchlist',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined),
+              activeIcon: Icon(Icons.assignment, color: Color(0xFF2563EB)),
+              label: 'Orders',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              activeIcon: Icon(Icons.account_balance_wallet, color: Color(0xFF2563EB)),
+              label: 'Portfolio',
+            ),
+            BottomNavigationBarItem(
+              icon: Obx(() {
+                final count = brokerController.connectedCount.value;
+                return Badge(
+                  isLabelVisible: count > 0,
+                  backgroundColor: const Color(0xFF10B981),
+                  label: Text('$count'),
+                  child: const Icon(Icons.account_balance_outlined),
+                );
+              }),
+              activeIcon: Obx(() {
+                final count = brokerController.connectedCount.value;
+                return Badge(
+                  isLabelVisible: count > 0,
+                  backgroundColor: const Color(0xFF10B981),
+                  label: Text('$count'),
+                  child: const Icon(Icons.account_balance, color: Color(0xFF2563EB)),
+                );
+              }),
+              label: 'Broker API',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeDashboard(
+    BuildContext context,
+    BrokerController brokerController,
+    WatchlistController watchlistController,
+    PortfolioController portfolioController,
+  ) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D1117),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: watchlistController.loadWatchlist,
+          color: const Color(0xFF2563EB),
+          backgroundColor: const Color(0xFF1E222D),
+          child: CustomScrollView(
+            slivers: [
+              // Header Banner
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Risk Management App',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Indian Stock Market Order Entry & SL/TP Calculator',
+                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      Obx(() {
+                        final count = brokerController.connectedCount.value;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _currentIndex = 4; // Navigate to Broker Settings tab
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: count > 0
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                  : const Color(0xFFEF4444).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: count > 0
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFFEF4444),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  count > 0 ? Icons.cloud_done : Icons.cloud_off,
+                                  size: 14,
+                                  color: count > 0
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFFEF4444),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  count > 0 ? '$count Active' : 'Connect',
+                                  style: TextStyle(
+                                    color: count > 0
+                                        ? const Color(0xFF10B981)
+                                        : const Color(0xFFEF4444),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Search Launcher Bar (Primary Action)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: GestureDetector(
+                    onTap: () => Get.to(() => const SearchView()),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B22),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF2563EB), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.search, color: Color(0xFF2563EB)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Search Indian stock (e.g. RELIANCE, TCS, INFY)...',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                            ),
+                          ),
+                          Container(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'SEARCH',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Market Indices Ribbon
+              SliverToBoxAdapter(
+                child: Container(
+                  height: 90,
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      _buildIndexCard('NIFTY 50', '25,410.20', '+0.45%', true),
+                      _buildIndexCard('SENSEX', '83,184.40', '+0.52%', true),
+                      _buildIndexCard('NIFTY BANK', '52,240.10', '+0.38%', true),
+                      _buildIndexCard('NIFTY IT', '42,890.60', '-0.15%', false),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Watchlist Section Title
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Watchlist (NSE/BSE)',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Obx(() {
+                        return Text(
+                          '${watchlistController.watchlist.length} Saved',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Watchlist List
+              Obx(() {
+                if (watchlistController.isLoading.value) {
+                  return const SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(30),
+                        child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                      ),
+                    ),
+                  );
+                }
+
+                if (watchlistController.watchlist.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B22),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF2A2E39)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.bookmark_outline,
+                              size: 44, color: Colors.grey[600]),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Your Watchlist is Empty',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Tap the search bar above to search for Indian stocks (e.g. RELIANCE, TCS, INFY) and open Risk Management.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final stock = watchlistController.watchlist[index];
+                      return _buildStockTile(stock, watchlistController);
+                    },
+                    childCount: watchlistController.watchlist.length,
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWatchlistView(WatchlistController watchlistController) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D1117),
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'NSE/BSE Watchlist',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Track prices & calculate risk levels',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Obx(() {
+              if (watchlistController.watchlist.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(30),
+                    alignment: Alignment.center,
+                    child: Text('No stocks in Watchlist yet.',
+                        style: TextStyle(color: Colors.grey[500])),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final stock = watchlistController.watchlist[index];
+                    return _buildStockTile(stock, watchlistController);
+                  },
+                  childCount: watchlistController.watchlist.length,
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIndexCard(
+      String title, String value, String change, bool isPositive) {
+    return Container(
+      width: 135,
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2A2E39)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title,
+              style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13)),
+          const SizedBox(height: 2),
+          Text(change,
+              style: TextStyle(
+                  color: isPositive
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFEF4444),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockTile(
+      Stock stock, WatchlistController watchlistController) {
+    final bool isPositive = stock.change >= 0;
+    final Color color =
+        isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2A2E39)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        onTap: () {
+          Get.to(() => StockDetailView(stock: stock));
+        },
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFF21262D),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            stock.displaySymbol.substring(
+                0, stock.displaySymbol.length > 3 ? 3 : stock.displaySymbol.length),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        title: Row(
+          children: [
+            Text(
+              stock.displaySymbol,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                stock.exchange,
+                style: const TextStyle(
+                  color: Color(0xFF2563EB),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 9,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => watchlistController.toggleSave(stock),
+              child: const Icon(Icons.bookmark, size: 18, color: Color(0xFF2563EB)),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          stock.name,
+          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '₹${stock.price.toStringAsFixed(2)}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${isPositive ? "+" : ""}₹${stock.change.toStringAsFixed(2)} (${isPositive ? "+" : ""}${stock.percentChange.toStringAsFixed(2)}%)',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

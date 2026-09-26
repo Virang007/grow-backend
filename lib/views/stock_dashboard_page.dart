@@ -69,7 +69,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
       setState(() {
         _isLoading = false;
         _hasError = true;
-        _errorMessage = 'Unable to fetch market quotes. Check your connection.';
+        _errorMessage = 'Unable to fetch NSE/BSE market quotes. Check connection.';
       });
     }
   }
@@ -111,7 +111,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Search failed. Please try again.'),
+              content: Text('Indian market search failed. Try again.'),
               backgroundColor: Color(0xFFEF4444),
             ),
           );
@@ -147,8 +147,8 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
         SnackBar(
           content: Text(
             newSavedState
-                ? '${stock.symbol} added to Watchlist'
-                : '${stock.symbol} removed from Watchlist',
+                ? '${stock.displaySymbol} added to Indian Watchlist'
+                : '${stock.displaySymbol} removed from Watchlist',
           ),
           backgroundColor: newSavedState
               ? const Color(0xFF10B981)
@@ -204,17 +204,17 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Markets',
+                            'Indian Markets (NSE/BSE)',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 26,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Live quotes & watchlist',
+                            'Live INR (₹) Quotes & Paper Trading',
                             style: TextStyle(
                               color: Colors.grey[400],
                               fontSize: 13,
@@ -282,7 +282,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                     controller: _searchController,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: 'Search stocks, indices, crypto (e.g. AAPL, NVDA)...',
+                      hintText: 'Search Indian stocks (e.g. RELIANCE, TCS, INFY)...',
                       hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                       prefixIcon: const Icon(Icons.search, color: Color(0xFF2563EB)),
                       suffixIcon: _searchController.text.isNotEmpty
@@ -319,7 +319,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     child: Text(
-                      'Search Results (${_searchResults.length})',
+                      'Indian Stock Results (${_searchResults.length})',
                       style: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 14,
@@ -343,7 +343,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                               padding: const EdgeInsets.all(40),
                               alignment: Alignment.center,
                               child: Text(
-                                'No stocks found for "${_searchController.text}"',
+                                'No Indian stocks found matching "${_searchController.text}"',
                                 style: TextStyle(color: Colors.grey[500]),
                               ),
                             ),
@@ -358,7 +358,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                             ),
                           ),
               ] else ...[
-                // Market Summary Ribbon
+                // Indian Market Indices Ribbon
                 SliverToBoxAdapter(
                   child: Container(
                     height: 95,
@@ -367,10 +367,10 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
-                        _buildMarketIndexCard('S&P 500', '5,620.40', '+0.85%', true),
-                        _buildMarketIndexCard('NASDAQ', '17,840.10', '+1.15%', true),
-                        _buildMarketIndexCard('DOW JONES', '41,120.80', '-0.12%', false),
                         _buildMarketIndexCard('NIFTY 50', '25,410.20', '+0.45%', true),
+                        _buildMarketIndexCard('SENSEX', '83,184.40', '+0.52%', true),
+                        _buildMarketIndexCard('NIFTY BANK', '52,240.10', '+0.38%', true),
+                        _buildMarketIndexCard('NIFTY IT', '42,890.60', '-0.15%', false),
                       ],
                     ),
                   ),
@@ -384,7 +384,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'My Watchlist',
+                          'NSE/BSE Watchlist',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -471,7 +471,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Use the search bar above to search for any stock ticker and tap the bookmark icon to add it here.',
+                            'Use the search bar above to search for Indian stocks (e.g. RELIANCE, TCS, INFY) and tap the bookmark icon.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.grey[400],
@@ -572,7 +572,8 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
           ),
           alignment: Alignment.center,
           child: Text(
-            stock.symbol.substring(0, stock.symbol.length > 3 ? 3 : stock.symbol.length),
+            stock.displaySymbol.substring(
+                0, stock.displaySymbol.length > 3 ? 3 : stock.displaySymbol.length),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -583,11 +584,27 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
         title: Row(
           children: [
             Text(
-              stock.symbol,
+              stock.displaySymbol,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                stock.exchange,
+                style: const TextStyle(
+                  color: Color(0xFF2563EB),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 9,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -615,7 +632,7 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '\$${stock.price.toStringAsFixed(2)}',
+              '₹${stock.price.toStringAsFixed(2)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -630,11 +647,11 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '${isPositive ? "+" : ""}${stock.percentChange.toStringAsFixed(2)}%',
+                '${isPositive ? "+" : ""}₹${stock.change.toStringAsFixed(2)} (${isPositive ? "+" : ""}${stock.percentChange.toStringAsFixed(2)}%)',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 11,
+                  fontSize: 10,
                 ),
               ),
             ),

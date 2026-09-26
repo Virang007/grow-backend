@@ -1,0 +1,766 @@
+IMPORTANT: Redesign/fix the app around the REAL core purpose of this product.
+
+This is NOT a full trading/broker app.
+
+The app's ONLY main purpose is:
+
+**Search an Indian stock → Open stock → BUY/SELL → Risk Management → Calculate Stop Loss & Target → Confirm → Place the broker order with SL/TP.**
+
+The user may connect a broker such as Dhan. The user's broker remains the source for actual account/trading execution. Our app is the **risk-management and order-entry layer**, not a replacement for the broker app.
+
+---
+
+## 1. CORE USER FLOW
+
+The complete primary flow must be:
+
+```text
+Open App
+   ↓
+Search Stock
+   ↓
+Select Indian Stock
+   ↓
+Stock Detail
+   ↓
+BUY / SELL
+   ↓
+Risk Management Page
+   ↓
+Select Risk Method
+   ↓
+Enter/Select required values
+   ↓
+Calculate Entry + SL + TP
+   ↓
+Show Risk/Reward Preview
+   ↓
+Confirm Order
+   ↓
+Send Order to Connected Broker
+   ↓
+Order Confirmation
+```
+
+Keep this flow extremely simple.
+
+Do NOT add unnecessary social features, news feeds, complicated portfolio screens, or unrelated functionality.
+
+---
+
+# 2. INDIA MARKET ONLY
+
+The app must support:
+
+* NSE
+* BSE
+* Indian equities
+* INR ₹
+
+Remove:
+
+* US stocks
+* NASDAQ
+* NYSE
+* USD
+* Crypto
+* BTC
+* Alpaca
+* International markets
+
+Example searchable stocks:
+
+```text
+RELIANCE
+TCS
+INFY
+HDFCBANK
+ICICIBANK
+SBIN
+ITC
+LT
+BHARTIARTL
+```
+
+All prices must be shown in:
+
+```text
+₹2,450.50
+```
+
+Never `$`.
+
+---
+
+# 3. STOCK SEARCH
+
+This is the first major feature.
+
+When the user opens the app, the search experience should be immediately available.
+
+User searches:
+
+```text
+RELIANCE
+```
+
+Show proper matching Indian stocks.
+
+Each result:
+
+```text
+Reliance Industries Ltd
+RELIANCE
+NSE
+₹Current Price
+```
+
+Search must support:
+
+* Symbol
+* Company name
+* Partial search
+* Case insensitive search
+* Fast results
+* Loading state
+* Empty state
+* Error state
+
+Do NOT show random/fake shares.
+
+Use the connected market-data/broker API wherever available.
+
+---
+
+# 4. STOCK DETAIL PAGE
+
+When user selects a stock, open a proper dedicated Stock Detail page.
+
+Show:
+
+```text
+Reliance Industries Ltd
+
+RELIANCE
+NSE
+
+₹2,450.50
++₹25.20 (+1.04%)
+
+[ BUY ]     [ SELL ]
+
+Chart
+```
+
+The BUY and SELL buttons are the primary actions.
+
+Do not bury BUY/SELL inside menus.
+
+---
+
+# 5. BUY / SELL → RISK MANAGEMENT PAGE
+
+When user taps BUY:
+
+```text
+Stock Detail
+     ↓
+BUY
+     ↓
+Risk Management
+```
+
+When user taps SELL:
+
+```text
+Stock Detail
+     ↓
+SELL
+     ↓
+Risk Management
+```
+
+Both must open the same Risk Management concept but calculate the levels correctly for LONG/BUY versus SHORT/SELL where the connected broker/product supports it.
+
+---
+
+# 6. RISK MANAGEMENT PAGE
+
+This is the MOST IMPORTANT screen in the application.
+
+Make this page extremely clear.
+
+Example:
+
+```text
+Risk Management
+
+RELIANCE
+BUY
+
+Entry Price
+₹2,450.00
+
+Quantity
+[ 10 ]
+
+Risk Method
+
+○ 1 : 1
+○ 1 : 2
+○ 1 : 3
+
+○ Swing High
+○ Swing Low
+
+----------------------------
+
+Stop Loss
+₹2,400.00
+
+Target
+₹2,550.00
+
+Risk / Share
+₹50.00
+
+Total Risk
+₹500.00
+
+Potential Profit
+₹1,000.00
+
+Risk : Reward
+1 : 2
+
+----------------------------
+
+[ CONFIRM ORDER ]
+```
+
+The exact layout can be modernized, but the information and logic must remain.
+
+---
+
+# 7. RISK : REWARD OPTIONS
+
+Provide these selectable options:
+
+```text
+1 : 1
+1 : 2
+1 : 3
+Swing High
+Swing Low
+```
+
+The selected option must actually change the calculations.
+
+Do NOT make these decorative buttons.
+
+---
+
+# 8. RISK : REWARD CALCULATION
+
+For a BUY/LONG:
+
+```text
+Entry = E
+Stop Loss = SL
+
+Risk Per Share = E - SL
+
+For 1:1:
+Target = E + Risk
+
+For 1:2:
+Target = E + (Risk × 2)
+
+For 1:3:
+Target = E + (Risk × 3)
+```
+
+Example:
+
+```text
+Entry = ₹100
+SL = ₹95
+
+Risk = ₹5
+
+1:1 → TP ₹105
+1:2 → TP ₹110
+1:3 → TP ₹115
+```
+
+For SELL/SHORT, reverse the direction:
+
+```text
+Risk Per Share = SL - E
+
+1:1:
+Target = E - Risk
+
+1:2:
+Target = E - (Risk × 2)
+
+1:3:
+Target = E - (Risk × 3)
+```
+
+Never accidentally calculate BUY and SELL using the same formula.
+
+---
+
+# 9. SWING HIGH / SWING LOW
+
+If user selects:
+
+```text
+Swing Low
+```
+
+use the selected swing-low price as the Stop Loss for BUY.
+
+Example:
+
+```text
+Entry: ₹100
+Swing Low: ₹94
+
+Risk: ₹6
+
+1:2
+
+Target = ₹112
+```
+
+If user selects:
+
+```text
+Swing High
+```
+
+use the appropriate swing level for the selected trade direction.
+
+For BUY:
+
+```text
+Swing Low → SL
+```
+
+For SELL:
+
+```text
+Swing High → SL
+```
+
+Do NOT automatically invent swing values.
+
+The user must be able to enter/select the swing price.
+
+---
+
+# 10. QUANTITY
+
+Quantity must be part of the risk calculation.
+
+Example:
+
+```text
+Entry = ₹100
+SL = ₹95
+Quantity = 20
+
+Risk/share = ₹5
+
+Total Risk = ₹100
+```
+
+Show this clearly before confirmation.
+
+If account/broker information allows available capital validation, show:
+
+```text
+Estimated Order Value
+Available Balance
+Total Risk
+```
+
+Do not allow obviously invalid quantity such as:
+
+```text
+0
+negative quantity
+empty quantity
+```
+
+---
+
+# 11. RISK PREVIEW
+
+Before placing the order, show a clear confirmation card:
+
+```text
+ORDER PREVIEW
+
+RELIANCE · NSE
+
+BUY
+Quantity: 10
+
+Entry: ₹2,450
+Stop Loss: ₹2,400
+Target: ₹2,550
+
+Risk / Share: ₹50
+Total Risk: ₹500
+Potential Profit: ₹1,000
+
+Risk : Reward
+1 : 2
+
+[ CONFIRM & PLACE ORDER ]
+```
+
+The user must clearly understand the SL and TP before pressing confirm.
+
+---
+
+# 12. BROKER EXECUTION
+
+This is where the connected broker is used.
+
+Example:
+
+```text
+User connects Dhan
+       ↓
+Our app gets Dhan authorization
+       ↓
+User searches RELIANCE
+       ↓
+Risk Management calculates SL/TP
+       ↓
+User confirms
+       ↓
+Our app sends order to Dhan
+```
+
+Do NOT try to become a broker.
+
+Do NOT store a fake local order as "executed" when the broker rejected it.
+
+Only show:
+
+```text
+Order Placed
+```
+
+when the broker API actually confirms the order.
+
+Dhan's current API supports order placement, order status retrieval, modification/cancellation and stop-loss order types.
+
+---
+
+# 13. SL + TP ORDER LOGIC
+
+The most important requirement:
+
+The final broker order must use the calculated:
+
+```text
+Entry
+Stop Loss
+Target
+Quantity
+BUY / SELL
+```
+
+Do not calculate SL/TP only for display and then send a normal order without them.
+
+If the selected broker supports a native bracket/super-order mechanism, use the broker's supported mechanism for entry + target + stop-loss.
+
+If the broker does NOT support the exact required order structure:
+
+1. Place the entry order.
+2. Wait for confirmed execution where required.
+3. Place the corresponding SL and TP orders using the broker's supported order types.
+4. Track all related order IDs.
+5. Handle partial fills/rejections safely.
+
+Never claim that SL/TP is protected if the broker did not successfully accept those orders.
+
+Dhan's API documents `STOP_LOSS`, `STOP_LOSS_MARKET`, and bracket-order fields such as `boProfitValue` and `boStopLossValue`; use only the order structure actually supported for the selected product/account.
+
+---
+
+# 14. BROKER ABSTRACTION
+
+Do NOT hard-code the entire application specifically around Dhan.
+
+Create:
+
+```text
+BrokerService
+```
+
+with broker-specific implementations:
+
+```text
+DhanBrokerService
+FutureBrokerService
+```
+
+The UI and risk-management logic should not care which broker is connected.
+
+Example:
+
+```text
+Risk Management
+      ↓
+OrderRequest
+      ↓
+BrokerService
+      ↓
+DhanBrokerService
+      ↓
+Dhan API
+```
+
+This allows adding other Indian brokers later.
+
+---
+
+# 15. GETX — ENTIRE APP
+
+Use GetX properly throughout the complete application.
+
+Do NOT mix random state management systems.
+
+Use:
+
+```text
+GetxController
+Rx
+RxList
+Rxn
+RxBool
+Obx
+Get.put
+Get.lazyPut
+Bindings
+```
+
+Recommended structure:
+
+```text
+lib/
+
+controllers/
+  market_controller.dart
+  search_controller.dart
+  stock_detail_controller.dart
+  risk_management_controller.dart
+  order_controller.dart
+  broker_controller.dart
+
+services/
+  market_service.dart
+  broker_service.dart
+  dhan_broker_service.dart
+  storage_service.dart
+
+models/
+  stock_model.dart
+  order_request.dart
+  risk_calculation.dart
+  order_result.dart
+  broker_model.dart
+
+views/
+  home/
+  search/
+  stock_detail/
+  risk_management/
+  order_confirmation/
+
+bindings/
+  app_binding.dart
+```
+
+The Risk Management controller must contain the actual calculation logic.
+
+Do NOT put calculation logic inside widgets.
+
+---
+
+# 16. RISK CALCULATION MODEL
+
+Create a reusable model such as:
+
+```text
+RiskCalculation
+```
+
+containing:
+
+```text
+tradeSide
+entryPrice
+stopLoss
+targetPrice
+quantity
+riskPerShare
+totalRisk
+potentialProfit
+riskRewardRatio
+riskMethod
+```
+
+This object should be used by:
+
+```text
+Risk Management UI
+        ↓
+Order Confirmation
+        ↓
+Broker Order Request
+```
+
+Therefore the displayed numbers and the actual submitted order cannot accidentally become different.
+
+---
+
+# 17. VALIDATION
+
+Before confirmation validate:
+
+* Entry price > 0
+* Quantity > 0
+* SL exists
+* TP exists
+* BUY SL must be below entry
+* BUY TP must be above entry
+* SELL SL must be above entry
+* SELL TP must be below entry
+* Risk must be > 0
+* Target must be valid
+* Selected risk method must be valid
+
+If invalid, clearly explain what needs to be corrected.
+
+Do NOT allow CONFIRM ORDER until the calculation is valid.
+
+---
+
+# 18. USER DOES NOT NEED A FULL BROKER DASHBOARD
+
+IMPORTANT PRODUCT DECISION:
+
+Do NOT turn this app into a Dhan clone.
+
+The user already has Dhan/other broker apps for:
+
+* Full portfolio
+* Account management
+* Deposits
+* Withdrawals
+* Detailed trading history
+* Broker dashboard
+
+Our app focuses on:
+
+```text
+STOCK
+   ↓
+ENTRY
+   ↓
+RISK
+   ↓
+STOP LOSS
+   ↓
+TARGET
+   ↓
+ORDER
+```
+
+Keep the product focused.
+
+---
+
+# 19. FINAL USER EXPERIENCE
+
+The ideal user experience should feel like:
+
+```text
+1. Open app
+
+2. Search:
+   RELIANCE
+
+3. Open:
+   Reliance Industries
+   ₹2,450
+
+4. Tap:
+   BUY
+
+5. Risk Management opens
+
+6. Select:
+   1 : 2
+
+7. Enter:
+   Quantity = 10
+   Stop Loss = ₹2,400
+
+8. App automatically calculates:
+
+   Entry       ₹2,450
+   Stop Loss   ₹2,400
+   Risk/share  ₹50
+   Total Risk  ₹500
+   Target      ₹2,550
+   R:R         1:2
+
+9. User reviews
+
+10. Tap:
+    CONFIRM & PLACE ORDER
+
+11. Broker receives the order
+
+12. App shows actual broker response
+
+13. Done.
+```
+
+This simple flow is the PRIMARY PRODUCT.
+
+Do not add unnecessary functionality that distracts from it.
+
+---
+
+# 20. IMPORTANT
+
+The app is a **risk-management order-entry tool**, not a broker replacement.
+
+The most important things to get 100% correct are:
+
+1. Indian stock search
+2. Correct current price
+3. BUY/SELL direction
+4. Quantity
+5. Stop Loss calculation
+6. Target calculation
+7. Risk : Reward calculation
+8. Swing High/Low calculation
+9. Risk validation
+10. Order payload
+11. Broker execution
+12. SL + TP actually reaching the broker
+13. Order status confirmation
+14. GetX state management
+
+Do not spend development time on unrelated features until this complete flow works end-to-end.

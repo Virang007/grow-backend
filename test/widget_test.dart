@@ -2,9 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riskmanageapp/main.dart';
 
 void main() {
-  testWidgets('App renders markets screen properly', (WidgetTester tester) async {
+  testWidgets('App renders Indian stock markets screen properly', (WidgetTester tester) async {
     await tester.pumpWidget(const StockRiskManagerApp());
-    expect(find.text('Markets'), findsOneWidget);
-    expect(find.text('My Watchlist'), findsOneWidget);
+    expect(find.text('Indian Markets (NSE/BSE)'), findsOneWidget);
+    expect(find.text('NSE/BSE Watchlist'), findsOneWidget);
   });
 }

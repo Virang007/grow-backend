@@ -20,20 +20,40 @@ class StorageService {
     }
   }
 
-  // Load watchlist symbols
+  // Load watchlist symbols - Defaults to Indian Stock Tickers (NSE)
   static Future<List<String>> getSavedStockSymbols() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final List<String>? saved = prefs.getStringList(_savedStocksKey);
       if (saved != null && saved.isNotEmpty) {
-        return saved;
+        // Filter out old crypto / US symbols if present
+        final filtered = saved.where((s) {
+          return !s.contains('BTC') &&
+              !s.contains('AAPL') &&
+              !s.contains('NVDA') &&
+              !s.contains('TSLA') &&
+              !s.contains('AMZN') &&
+              !s.contains('MSFT') &&
+              !s.contains('GOOGL') &&
+              !s.contains('META');
+        }).toList();
+
+        if (filtered.isNotEmpty) return filtered;
       }
     } catch (e) {
       if (kDebugMode) {
         print('Error loading stock symbols: $e');
       }
     }
-    return ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'RELIANCE', 'BTC-USD'];
+    return [
+      'RELIANCE.NS',
+      'TCS.NS',
+      'INFY.NS',
+      'HDFCBANK.NS',
+      'ICICIBANK.NS',
+      'SBIN.NS',
+      'TATAMOTORS.NS',
+    ];
   }
 
   // Save broker configurations
@@ -61,16 +81,39 @@ class StorageService {
             .map((item) => BrokerAccount.fromJson(jsonDecode(item)))
             .toList();
 
-        // Ensure Dhan Broker is present if missing from older state
+        // Filter out US / International brokers if present
+        loaded.removeWhere((b) => b.id == 'alpaca' || b.id == 'binance');
+
+        // Ensure MegaBull Demo Broker is present
+        if (!loaded.any((b) => b.id == 'megabull')) {
+          loaded.insert(
+            0,
+            BrokerAccount(
+              id: 'megabull',
+              name: 'MegaBull API (Demo)',
+              logoSymbol: 'MB',
+              description: 'Demo paper trading REST API (https://api.megabull.in)',
+              baseUrl: 'https://api.megabull.in',
+              apiKey: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
+              apiSecret: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
+              accountId: 'MB-DEMO-99',
+              environment: 'Sandbox',
+              status: BrokerStatus.connected,
+              lastConnectedAt: DateTime.now(),
+            ),
+          );
+        }
+
+        // Ensure Dhan Broker is present
         if (!loaded.any((b) => b.id == 'dhan')) {
           loaded.insert(
             1,
             BrokerAccount(
               id: 'dhan',
-              name: 'Dhan HQ',
+              name: 'Dhan HQ Sandbox',
               logoSymbol: 'DH',
               description:
-                  'Lightning-fast superfast stock & F&O trading REST API.',
+                  'Indian stock market REST & WebSocket API portal.',
             ),
           );
         }
@@ -87,41 +130,41 @@ class StorageService {
   static List<BrokerAccount> _getDefaultBrokers() {
     return [
       BrokerAccount(
+        id: 'megabull',
+        name: 'MegaBull API (Demo)',
+        logoSymbol: 'MB',
+        description: 'Demo paper trading REST API (https://api.megabull.in)',
+        baseUrl: 'https://api.megabull.in',
+        apiKey: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
+        apiSecret: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
+        accountId: 'MB-DEMO-99',
+        environment: 'Sandbox',
+        status: BrokerStatus.connected,
+        lastConnectedAt: DateTime.now(),
+      ),
+      BrokerAccount(
         id: 'zerodha',
-        name: 'Zerodha Kite',
+        name: 'Zerodha Kite Sandbox',
         logoSymbol: 'ZK',
         description: 'India\'s largest discount broker & API portal.',
       ),
       BrokerAccount(
         id: 'dhan',
-        name: 'Dhan HQ',
+        name: 'Dhan HQ Sandbox',
         logoSymbol: 'DH',
-        description: 'Lightning-fast superfast stock & F&O trading REST API.',
+        description: 'Indian stock market REST & WebSocket API portal.',
       ),
       BrokerAccount(
-        id: 'alpaca',
-        name: 'Alpaca Trading',
-        logoSymbol: 'AP',
-        description: 'Commission-free stock & crypto REST / WebSocket API.',
+        id: 'angelone',
+        name: 'AngelOne SmartAPI',
+        logoSymbol: 'AO',
+        description: 'Indian stock broker API for NSE/BSE equities.',
       ),
       BrokerAccount(
-        id: 'ibkr',
-        name: 'Interactive Brokers',
-        logoSymbol: 'IB',
-        description:
-            'Global market access API for equities, options & futures.',
-      ),
-      BrokerAccount(
-        id: 'binance',
-        name: 'Binance Global',
-        logoSymbol: 'BN',
-        description: 'Leading global spot & futures trading platform API.',
-      ),
-      BrokerAccount(
-        id: 'robinhood',
-        name: 'Robinhood Connect',
-        logoSymbol: 'RH',
-        description: 'Retail trading REST API integration with OAuth 2.0.',
+        id: 'upstox',
+        name: 'Upstox Developer API',
+        logoSymbol: 'UP',
+        description: 'REST API trading portal for Indian markets.',
       ),
     ];
   }

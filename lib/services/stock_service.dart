@@ -1,33 +1,36 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import '../models/stock.dart';
+import '../models/stock_model.dart';
 
 class StockService {
-  // Live cache for fetched stocks
   static final Map<String, Stock> _cache = {};
 
-  // Popular default market watch symbols
+  // Default watchlist symbols - Top Indian Stocks (NSE)
   static final List<String> defaultWatchlistSymbols = [
-    'AAPL',
-    'NVDA',
-    'TSLA',
-    'AMZN',
-    'MSFT',
-    'GOOGL',
-    'META',
-    'RELIANCE',
-    'TCS',
-    'BTC-USD'
+    'RELIANCE.NS',
+    'TCS.NS',
+    'INFY.NS',
+    'HDFCBANK.NS',
+    'ICICIBANK.NS',
+    'SBIN.NS',
+    'TATAMOTORS.NS',
+    'BHARTIARTL.NS',
+    'ITC.NS',
+    'LT.NS'
   ];
 
-  /// Fetch live quote for a specific symbol using live public REST API
-  static Future<Stock?> fetchLiveStockQuote(String symbol) async {
-    final cleanSymbol = symbol.trim().toUpperCase();
+  /// Fetch live quote for an Indian stock (NSE/BSE)
+  static Future<Stock?> fetchLiveStockQuote(String rawSymbol) async {
+    String cleanSymbol = rawSymbol.trim().toUpperCase();
     if (cleanSymbol.isEmpty) return null;
 
+    // Default to NSE (.NS) if no exchange specified
+    if (!cleanSymbol.endsWith('.NS') && !cleanSymbol.endsWith('.BO')) {
+      cleanSymbol = '$cleanSymbol.NS';
+    }
+
     try {
-      // 1. Try fetching live quote from Yahoo Finance API endpoint
       final url = Uri.parse(
           'https://query1.finance.yahoo.com/v8/finance/chart/$cleanSymbol?range=1d&interval=5m');
       final response = await http
@@ -40,17 +43,20 @@ class StockService {
         final result = data['chart']?['result']?[0];
         if (result != null) {
           final meta = result['meta'];
-          final double currentPrice = (meta['regularMarketPrice'] as num?)?.toDouble() ?? 0.0;
-          final double prevClose = (meta['chartPreviousClose'] as num?)?.toDouble() ?? currentPrice;
+          final double currentPrice =
+              (meta['regularMarketPrice'] as num?)?.toDouble() ?? 0.0;
+          final double prevClose =
+              (meta['chartPreviousClose'] as num?)?.toDouble() ?? currentPrice;
           final double change = currentPrice - prevClose;
-          final double percentChange = prevClose != 0 ? (change / prevClose) * 100 : 0.0;
+          final double percentChange =
+              prevClose != 0 ? (change / prevClose) * 100 : 0.0;
 
-          final double high = (meta['regularMarketDayHigh'] as num?)?.toDouble() ?? currentPrice;
-          final double low = (meta['regularMarketDayLow'] as num?)?.toDouble() ?? currentPrice;
-          final double open = (meta['regularMarketDayLow'] as num?)?.toDouble() ?? currentPrice;
-
-          final String currency = meta['currency'] ?? 'USD';
-          final String currencySymbol = currency == 'INR' ? '₹' : '\$';
+          final double high =
+              (meta['regularMarketDayHigh'] as num?)?.toDouble() ?? currentPrice * 1.01;
+          final double low =
+              (meta['regularMarketDayLow'] as num?)?.toDouble() ?? currentPrice * 0.99;
+          final double open =
+              (meta['regularMarketDayLow'] as num?)?.toDouble() ?? currentPrice;
 
           final List<dynamic>? closePrices =
               result['indicators']?['quote']?[0]?['close'];
@@ -67,18 +73,25 @@ class StockService {
             chartPoints = [prevClose, currentPrice];
           }
 
+          final String exchangeName =
+              cleanSymbol.endsWith('.BO') ? 'BSE' : 'NSE';
+
           final stock = Stock(
+            instrumentToken: cleanSymbol.hashCode.abs().toString(),
             symbol: cleanSymbol,
-            name: meta['shortName'] ?? meta['longName'] ?? '$cleanSymbol Inc.',
+            name: meta['shortName'] ?? meta['longName'] ?? _getIndianStockName(cleanSymbol),
+            exchange: exchangeName,
             price: currentPrice,
             change: change,
             percentChange: percentChange,
             open: open,
             high: high,
             low: low,
-            marketCap: '$currencySymbol${_formatMarketCap(meta['marketCap'])}',
-            peRatio: (meta['trailingPE'] as num?)?.toDouble() ?? 24.5,
-            volume: (meta['regularMarketVolume'] as num?)?.toDouble() ?? 1000000.0,
+            swingHigh: high * 1.01,
+            swingLow: low * 0.99,
+            marketCap: _formatIndianMarketCap(meta['marketCap']),
+            peRatio: (meta['trailingPE'] as num?)?.toDouble() ?? 26.4,
+            volume: (meta['regularMarketVolume'] as num?)?.toDouble() ?? 5000000.0,
             chartData: chartPoints,
           );
 
@@ -87,14 +100,13 @@ class StockService {
         }
       }
     } catch (_) {
-      // Ignore network failure and fall back to fallback quote calculation
+      // Ignore API errors and fallback gracefully
     }
 
-    // 2. Fallback live generator for dynamic symbol search if offline or API throttled
-    return _generateFallbackQuote(cleanSymbol);
+    return _generateIndianFallbackQuote(cleanSymbol);
   }
 
-  /// Batch fetch live stock quotes for a list of symbols
+  /// Batch fetch quotes for list of Indian stock symbols
   static Future<List<Stock>> fetchBatchStockQuotes(List<String> symbols) async {
     final List<Stock> results = [];
     final futures = symbols.map((sym) => fetchLiveStockQuote(sym));
@@ -108,14 +120,14 @@ class StockService {
     return results;
   }
 
-  /// Search live stocks matching user query string
+  /// Search live Indian stocks (NSE / BSE) matching user query
   static Future<List<Stock>> searchLiveStocks(String query) async {
     final q = query.trim().toUpperCase();
     if (q.isEmpty) return [];
 
     try {
       final url = Uri.parse(
-          'https://query1.finance.yahoo.com/v1/finance/search?q=$q&quotesCount=8');
+          'https://query1.finance.yahoo.com/v1/finance/search?q=$q&quotesCount=10');
       final response = await http
           .get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(
         const Duration(seconds: 4),
@@ -128,7 +140,8 @@ class StockService {
           final List<String> symbolsToFetch = [];
           for (var qItem in quotes) {
             final String? sym = qItem['symbol'];
-            if (sym != null && sym.isNotEmpty) {
+            // Filter to only include Indian stocks (.NS or .BO)
+            if (sym != null && (sym.endsWith('.NS') || sym.endsWith('.BO'))) {
               symbolsToFetch.add(sym);
             }
           }
@@ -138,11 +151,9 @@ class StockService {
           }
         }
       }
-    } catch (_) {
-      // Fallback search matching cached / default quotes
-    }
+    } catch (_) {}
 
-    // Fallback: search default symbols or create quote for custom query ticker
+    // Fallback search using Indian ticker format
     final Stock? exactMatch = await fetchLiveStockQuote(q);
     if (exactMatch != null) {
       return [exactMatch];
@@ -150,34 +161,40 @@ class StockService {
     return [];
   }
 
-  static Stock _generateFallbackQuote(String symbol) {
+  static Stock _generateIndianFallbackQuote(String symbol) {
     if (_cache.containsKey(symbol)) {
       return _cache[symbol]!;
     }
 
-    // Create realistic market quote for dynamic symbol
-    final double basePrice = (symbol.hashCode % 500) + 20.0;
-    final double change = ((symbol.hashCode % 100) - 45) / 10.0;
+    final String displaySym = symbol.replaceAll('.NS', '').replaceAll('.BO', '');
+    final String exchange = symbol.endsWith('.BO') ? 'BSE' : 'NSE';
+
+    final double basePrice = (displaySym.hashCode.abs() % 2500) + 150.0;
+    final double change = ((displaySym.hashCode % 120) - 40) / 2.0;
     final double percentChange = (change / basePrice) * 100;
 
     final stock = Stock(
+      instrumentToken: symbol.hashCode.abs().toString(),
       symbol: symbol,
-      name: '$symbol Global Asset',
+      name: _getIndianStockName(symbol),
+      exchange: exchange,
       price: double.parse(basePrice.toStringAsFixed(2)),
       change: double.parse(change.toStringAsFixed(2)),
       percentChange: double.parse(percentChange.toStringAsFixed(2)),
-      open: basePrice - 1.2,
-      high: basePrice + 3.4,
-      low: basePrice - 2.1,
-      marketCap: '\$${(basePrice * 0.4).toStringAsFixed(1)}B',
-      peRatio: 18.4,
-      volume: 15400000.0,
+      open: basePrice - 8.0,
+      high: basePrice + 15.0,
+      low: basePrice - 12.0,
+      swingHigh: basePrice + 25.0,
+      swingLow: basePrice - 20.0,
+      marketCap: '₹${(basePrice * 8.5).toStringAsFixed(1)} Cr',
+      peRatio: 22.8,
+      volume: 3400000.0,
       chartData: [
-        basePrice - 2.5,
-        basePrice - 1.2,
-        basePrice + 0.5,
-        basePrice - 0.8,
-        basePrice + 1.4,
+        basePrice - 12.0,
+        basePrice - 6.0,
+        basePrice + 2.0,
+        basePrice - 4.0,
+        basePrice + 8.0,
         basePrice + change
       ],
     );
@@ -186,16 +203,42 @@ class StockService {
     return stock;
   }
 
-  static String _formatMarketCap(dynamic cap) {
-    if (cap == null || cap is! num) return '100.0B';
-    final double numCap = cap.toDouble();
-    if (numCap >= 1e12) {
-      return '${(numCap / 1e12).toStringAsFixed(2)}T';
-    } else if (numCap >= 1e9) {
-      return '${(numCap / 1e9).toStringAsFixed(2)}B';
-    } else if (numCap >= 1e6) {
-      return '${(numCap / 1e6).toStringAsFixed(2)}M';
+  static String _getIndianStockName(String symbol) {
+    final clean = symbol.replaceAll('.NS', '').replaceAll('.BO', '');
+    switch (clean) {
+      case 'RELIANCE':
+        return 'Reliance Industries Ltd.';
+      case 'TCS':
+        return 'Tata Consultancy Services Ltd.';
+      case 'INFY':
+        return 'Infosys Limited';
+      case 'HDFCBANK':
+        return 'HDFC Bank Limited';
+      case 'ICICIBANK':
+        return 'ICICI Bank Limited';
+      case 'SBIN':
+        return 'State Bank of India';
+      case 'TATAMOTORS':
+        return 'Tata Motors Limited';
+      case 'BHARTIARTL':
+        return 'Bharti Airtel Limited';
+      case 'ITC':
+        return 'ITC Limited';
+      case 'LT':
+        return 'Larsen & Toubro Limited';
+      default:
+        return '$clean India Ltd.';
     }
-    return numCap.toStringAsFixed(0);
+  }
+
+  static String _formatIndianMarketCap(dynamic cap) {
+    if (cap == null || cap is! num) return '₹1,50,000 Cr';
+    final double numCap = cap.toDouble();
+    if (numCap >= 1e7) {
+      return '₹${(numCap / 1e7).toStringAsFixed(1)} Cr';
+    } else if (numCap >= 1e5) {
+      return '₹${(numCap / 1e5).toStringAsFixed(1)} Lakh';
+    }
+    return '₹${numCap.toStringAsFixed(0)}';
   }
 }
