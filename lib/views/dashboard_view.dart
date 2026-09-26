@@ -517,7 +517,14 @@ class _DashboardViewState extends State<DashboardView> {
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () => watchlistController.toggleSave(stock),
-              child: const Icon(Icons.bookmark, size: 18, color: Color(0xFF2563EB)),
+              child: Obx(() {
+                final saved = watchlistController.isSaved(stock.symbol);
+                return Icon(
+                  saved ? Icons.bookmark : Icons.bookmark_border,
+                  size: 18,
+                  color: saved ? const Color(0xFF2563EB) : Colors.grey[500],
+                );
+              }),
             ),
           ],
         ),

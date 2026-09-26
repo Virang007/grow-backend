@@ -36,15 +36,24 @@ class _StockDetailViewState extends State<StockDetailView> {
         ),
         actions: [
           Obx(() {
-            final isSaved = watchlistController.isSaved(widget.stock.symbol);
+            // Clean symbol for matching (remove .NS, .BO suffix)
+            final cleanSym = widget.stock.symbol
+                .replaceAll('.NS', '')
+                .replaceAll('.BO', '')
+                .trim();
+            final isSaved = watchlistController.savedSymbols.any((s) =>
+                s == widget.stock.symbol ||
+                s == cleanSym ||
+                s.replaceAll('.NS', '').replaceAll('.BO', '') == cleanSym);
             return IconButton(
               icon: Icon(
                 isSaved ? Icons.bookmark : Icons.bookmark_border,
                 color: isSaved ? const Color(0xFF2563EB) : Colors.grey[400],
                 size: 26,
               ),
-              onPressed: () {
-                // Toggle watchlist
+              tooltip: isSaved ? 'Remove from Watchlist' : 'Add to Watchlist',
+              onPressed: () async {
+                await watchlistController.toggleSave(widget.stock);
               },
             );
           }),
