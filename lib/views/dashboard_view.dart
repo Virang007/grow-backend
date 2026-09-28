@@ -130,25 +130,30 @@ class _DashboardViewState extends State<DashboardView> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Home',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.5,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Home',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.5,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Indian Stock Market Shares & SL/TP Calculator',
-                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              'Indian Stock Market Shares & SL/TP Calculator',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Obx(() {
                         final count = brokerController.connectedCount.value;
                         return GestureDetector(
@@ -223,6 +228,8 @@ class _DashboardViewState extends State<DashboardView> {
                             child: Text(
                               'Search Indian stock (e.g. RELIANCE, TCS, INFY)...',
                               style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Container(
@@ -540,12 +547,16 @@ class _DashboardViewState extends State<DashboardView> {
         ),
         title: Row(
           children: [
-            Text(
-              stock.displaySymbol,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+            Flexible(
+              child: Text(
+                stock.displaySymbol,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 6),
