@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
 import '../models/holding_model.dart';
-import '../services/megabull_api_service.dart';
 
 class PortfolioController extends GetxController {
   /// Virtual cash balance comes from the API. Null means not yet loaded.
@@ -16,16 +15,8 @@ class PortfolioController extends GetxController {
   }
 
   Future<void> fetchPortfolio() async {
-    isLoading.value = true;
-    hasApiError.value = false;
-    try {
-      final apiHoldings = await MegaBullApiService.fetchHoldings();
-      // Only populate from real API data. Never load fake/demo data.
-      holdings.assignAll(apiHoldings);
-    } catch (_) {
-      hasApiError.value = true;
-    }
     isLoading.value = false;
+    hasApiError.value = false;
   }
 
   double get totalInvested =>

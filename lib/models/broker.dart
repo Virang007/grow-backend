@@ -5,8 +5,9 @@ class BrokerAccount {
   String name;
   String logoSymbol;
   String description;
-  String apiKey;
-  String apiSecret;
+  String apiKey;      // Groww API Key (used to get ACCESS_TOKEN via TOTP flow)
+  String apiSecret;   // Legacy / unused for Groww
+  String totpSecret;  // Groww TOTP Secret (base32) — used to generate 6-digit TOTP
   String accountId;
   String baseUrl;
   String environment; // Sandbox / Live
@@ -21,6 +22,7 @@ class BrokerAccount {
     required this.description,
     this.apiKey = '',
     this.apiSecret = '',
+    this.totpSecret = '',
     this.accountId = '',
     this.baseUrl = '',
     this.environment = 'Sandbox',
@@ -37,6 +39,7 @@ class BrokerAccount {
       'description': description,
       'apiKey': apiKey,
       'apiSecret': apiSecret,
+      'totpSecret': totpSecret,
       'accountId': accountId,
       'baseUrl': baseUrl,
       'environment': environment,
@@ -54,6 +57,7 @@ class BrokerAccount {
       description: json['description'] ?? '',
       apiKey: json['apiKey'] ?? '',
       apiSecret: json['apiSecret'] ?? '',
+      totpSecret: json['totpSecret'] ?? '', // Must be real Base32 secret from Groww API Portal
       accountId: json['accountId'] ?? '',
       baseUrl: json['baseUrl'] ?? '',
       environment: json['environment'] ?? 'Sandbox',

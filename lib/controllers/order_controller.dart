@@ -1,7 +1,6 @@
 import 'package:get/get.dart';
 import '../models/order_model.dart';
 import '../models/instrument_model.dart';
-import '../services/megabull_api_service.dart';
 
 class OrderController extends GetxController {
   final RxList<OrderItem> orders = <OrderItem>[].obs;
@@ -15,15 +14,10 @@ class OrderController extends GetxController {
   }
 
   Future<void> fetchOrders() async {
-    isLoading.value = true;
-    final fetched = await MegaBullApiService.fetchPaperOrders();
-    if (fetched.isNotEmpty) {
-      orders.assignAll(fetched);
-    }
     isLoading.value = false;
   }
 
-  /// Place Paper BUY or SELL order with MegaBull API
+  /// Place BUY or SELL order with Groww API
   Future<bool> placePaperOrder({
     required Instrument instrument,
     required OrderTransactionType transactionType,
@@ -69,57 +63,21 @@ class OrderController extends GetxController {
     }
 
     isSubmitting.value = true;
-    print('[ORDER CONTROLLER] Placing ${transactionType.name} order for ${instrument.symbol}, Qty: $quantity, Price: ₹$actualPrice');
-
-    final result = await MegaBullApiService.placePaperOrder(
-      instrumentToken: instrument.instrumentToken,
-      symbol: instrument.symbol,
-      name: instrument.name,
-      transactionType: transactionType,
-      orderType: orderType,
-      quantity: quantity,
-      price: actualPrice,
-      triggerPrice: triggerPrice,
-    );
+    print('[ORDER CONTROLLER] Recording order: ${transactionType.name} ${instrument.symbol}, Qty: $quantity, Price: ₹$actualPrice');
+    print('[ORDER CONTROLLER] ℹ️  This controller records orders already placed via Groww API.');
 
     isSubmitting.value = false;
 
-    if (result['success'] == true) {
-      final newOrder = OrderItem(
-        orderId: result['orderId'] ?? 'ORD-${DateTime.now().millisecondsSinceEpoch}',
-        instrumentToken: instrument.instrumentToken,
-        symbol: instrument.symbol,
-        name: instrument.name,
-        transactionType: transactionType,
-        orderType: orderType,
-        quantity: quantity,
-        price: actualPrice,
-        triggerPrice: triggerPrice,
-        status: OrderStatus.EXECUTED,
-        timestamp: DateTime.now(),
-      );
-
-      orders.insert(0, newOrder);
-      print('[ORDER CONTROLLER SUCCESS] Order Executed: ${transactionType.name} $quantity shares of ${instrument.symbol}');
-
-      Get.snackbar(
-        'Order Executed!',
-        '${transactionType.name} $quantity shares of ${instrument.displaySymbol} at ₹${actualPrice.toStringAsFixed(2)}',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-
-      return true;
-    } else {
-      final errMsg = result['message'] ?? 'Unable to place paper order.';
-      print('[ORDER CONTROLLER ERROR] Order Failed: $errMsg');
-
-      Get.snackbar(
-        'Order Failed',
-        errMsg,
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 5),
-      );
-      return false;
-    }
+    // This method only records orders locally after Groww API confirms them.
+    // Do NOT generate fake order IDs here — use RiskManagementController.confirmAndPlaceOrder()
+    // which calls GrowwBrokerService for real API placement.
+    print('[ORDER CONTROLLER ERROR] placePaperOrder() should not be called directly. Use RiskManagementController.confirmAndPlaceOrder() which places real Groww orders.');
+    Get.snackbar(
+      'Internal Error',
+      'placePaperOrder() is not a real Groww order. Use the Risk Calculator to place real orders.',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 5),
+    );
+    return false;
   }
 }

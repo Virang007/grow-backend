@@ -32,7 +32,7 @@ class PortfolioView extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Indian Stock Market Holdings via MegaBull API',
+                'Indian Stock Market Holdings via Groww API',
                 style: TextStyle(color: Colors.grey[400], fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -235,7 +235,7 @@ class PortfolioView extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Could not connect to MegaBull API. Check your connection or API key in Broker Settings.',
+            'Could not connect to Groww API. Check your connection or API key in Broker Settings.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey[400], fontSize: 13),
           ),

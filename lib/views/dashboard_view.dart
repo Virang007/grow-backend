@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/broker_controller.dart';
 import '../controllers/watchlist_controller.dart';
-import '../controllers/portfolio_controller.dart';
 import '../controllers/home_controller.dart';
 import '../models/stock_model.dart';
 import 'search_view.dart';
@@ -25,7 +24,6 @@ class _DashboardViewState extends State<DashboardView> {
   Widget build(BuildContext context) {
     final BrokerController brokerController = Get.find<BrokerController>();
     final WatchlistController watchlistController = Get.find<WatchlistController>();
-    final PortfolioController portfolioController = Get.find<PortfolioController>();
     final HomeController homeController = Get.find<HomeController>();
 
     final List<Widget> pages = [

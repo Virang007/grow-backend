@@ -6,8 +6,7 @@ import '../models/order_request.dart';
 import '../models/order_result.dart';
 import '../models/order_model.dart';
 import '../services/broker_service.dart';
-import '../services/megabull_broker_service.dart';
-import '../services/dhan_broker_service.dart';
+import '../services/groww_service.dart';
 import '../controllers/broker_controller.dart';
 import '../controllers/order_controller.dart';
 import '../widgets/order_success_dialog.dart';
@@ -286,20 +285,24 @@ class RiskManagementController extends GetxController {
       (b) => b.status.name == 'connected',
       orElse: () => brokerController.brokers.first,
     );
-    print('[RISK CONTROLLER] Active broker: ${activeBroker.name} (${activeBroker.id})');
 
-    BrokerService brokerService;
-    if (activeBroker.id == 'dhan') {
-      brokerService = DhanBrokerService(
-        clientId: activeBroker.accountId.isNotEmpty ? activeBroker.accountId : 'DHAN-DEMO',
-        accessToken: activeBroker.apiSecret,
-      );
-    } else {
-      brokerService = MegaBullBrokerService(
-        apiKey: activeBroker.apiKey.isNotEmpty ? activeBroker.apiKey : 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
-        baseUrl: activeBroker.baseUrl.isNotEmpty ? activeBroker.baseUrl : 'https://api.megabull.in',
-      );
-    }
+    print('==================================================');
+    print('[RISK CONTROLLER] Broker Connection Status');
+    print('[RISK CONTROLLER] Broker Name  : ${activeBroker.name}');
+    print('[RISK CONTROLLER] Broker ID    : ${activeBroker.id}');
+    print('[RISK CONTROLLER] Status       : ${activeBroker.status.name}');
+    print('[RISK CONTROLLER] Environment  : ${activeBroker.environment}');
+    print('[RISK CONTROLLER] Base URL     : ${activeBroker.baseUrl}');
+    print('[RISK CONTROLLER] Token (20ch) : ${activeBroker.apiKey.length > 20 ? activeBroker.apiKey.substring(0, 20) : activeBroker.apiKey}...');
+    print('[RISK CONTROLLER] Last Connected: ${activeBroker.lastConnectedAt}');
+    print('==================================================');
+
+    BrokerService brokerService = GrowwBrokerService(
+      apiKey: activeBroker.apiKey,
+      apiSecret: activeBroker.apiSecret,
+      totpSecret: activeBroker.totpSecret,
+      baseUrl: activeBroker.baseUrl.isNotEmpty ? activeBroker.baseUrl : 'https://api.groww.in',
+    );
 
     final request = OrderRequest(
       instrumentToken: stock.instrumentToken,

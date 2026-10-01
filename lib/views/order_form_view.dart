@@ -98,7 +98,7 @@ class _OrderFormViewState extends State<OrderFormView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'MegaBull Paper ${transType.name}',
+                          'Groww ${transType.name}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,

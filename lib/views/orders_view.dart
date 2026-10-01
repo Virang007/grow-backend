@@ -36,7 +36,7 @@ class OrdersView extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'MegaBull Demo API Execution Log',
+                        'Groww Broker Execution Log',
                         style: TextStyle(color: Colors.grey[400], fontSize: 13),
                       ),
                     ],

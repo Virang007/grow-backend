@@ -217,7 +217,7 @@ class _OrderSuccessDialogState extends State<OrderSuccessDialog>
                                       color: sideColor.withValues(alpha: 0.3)),
                                 ),
                                 child: Text(
-                                  '$sideLabel  \u2022  MegaBull Paper Trade',
+                                  '$sideLabel  \u2022  Groww Order',
                                   style: TextStyle(
                                     color: sideColor,
                                     fontSize: 11,

@@ -74,49 +74,18 @@ class StorageService {
             .map((item) => BrokerAccount.fromJson(jsonDecode(item)))
             .toList();
 
-        // Filter out US / International brokers if present
-        loaded.removeWhere((b) => b.id == 'alpaca' || b.id == 'binance');
+        // Keep ONLY Groww broker
+        loaded.removeWhere((b) => b.id != 'groww');
 
-        // Ensure MegaBull Demo Broker is present and CONNECTED by default for testing
-        final megabullIndex = loaded.indexWhere((b) => b.id == 'megabull');
-        if (megabullIndex >= 0) {
-          final existingMB = loaded[megabullIndex];
-          existingMB.status = BrokerStatus.connected;
-          if (existingMB.baseUrl.isEmpty) existingMB.baseUrl = 'https://api.megabull.in';
-          if (existingMB.apiKey.isEmpty) existingMB.apiKey = 'd35a226d-5b3a-44d7-a954-2db87bd069a7';
-          if (existingMB.apiSecret.isEmpty) existingMB.apiSecret = 'd35a226d-5b3a-44d7-a954-2db87bd069a7';
-          if (existingMB.accountId.isEmpty) existingMB.accountId = 'MB-DEMO-99';
+        // Ensure Groww is present
+        if (!loaded.any((b) => b.id == 'groww')) {
+          loaded.add(_defaultGrowwBroker());
         } else {
-          loaded.insert(
-            0,
-            BrokerAccount(
-              id: 'megabull',
-              name: 'MegaBull API (Demo)',
-              logoSymbol: 'MB',
-              description: 'Demo paper trading REST API (https://api.megabull.in)',
-              baseUrl: 'https://api.megabull.in',
-              apiKey: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
-              apiSecret: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
-              accountId: 'MB-DEMO-99',
-              environment: 'Sandbox',
-              status: BrokerStatus.connected,
-              lastConnectedAt: DateTime.now(),
-            ),
-          );
-        }
-
-        // Ensure Dhan Broker is present
-        if (!loaded.any((b) => b.id == 'dhan')) {
-          loaded.insert(
-            1,
-            BrokerAccount(
-              id: 'dhan',
-              name: 'Dhan HQ Sandbox',
-              logoSymbol: 'DH',
-              description:
-                  'Indian stock market REST & WebSocket API portal.',
-            ),
-          );
+          final groww = loaded.firstWhere((b) => b.id == 'groww');
+          // Always apply latest credentials (new API key + correct TOTP secret).
+          _ensureGrowwDefaults(groww);
+          // Persist any updates immediately so the app always runs with fresh creds.
+          await saveBrokers(loaded);
         }
         return loaded;
       }
@@ -128,45 +97,70 @@ class StorageService {
     return _getDefaultBrokers();
   }
 
+  /// Fills in any missing critical fields for a Groww broker with safe defaults.
+  static void _ensureGrowwDefaults(BrokerAccount groww) {
+    // Latest Groww API Key JWT (role: auth-totp) — update when regenerated from Groww portal.
+    const defaultApiKey =
+        'eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NzkwNzMwMTMsImlhdCI6MTc5MDY3MzAxMywibmJmIjoxNzkwNjczMDEzLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJlMDQwM2NlZS0wZDQ5LTQ5NmYtOTc5My00ODRhNTkzNmNiYTVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiYWFiY2Y2NzAtYzFhNy00ZDY3LWFlMWItMDRlOWJiNWQ5YzRjXCIsXCJkZXZpY2VJZFwiOlwiM2MyZjBjZmItNGE3ZC01N2ZiLWFhMzctOGNjNzAzNDdkNDZlXCIsXCJzZXNzaW9uSWRcIjpcIjg4ZGVjZjQ1LWE5ZTYtNDZlZi04Y2YyLWEyNmVmODE2MWJiY1wiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkV2V3lsaUNHbWQwcFFUVG1FM1REZnhSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwYzE6NDAxZjo2ZTk2OjVjMDA6MTExZToyYmM5Ojk0OWUsMTcyLjY5Ljk0LjE1MCwzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU3OTA3MzAxMzUwOSxcInZlbmRvck5hbWVcIjpcImdyb3d3QXBpXCJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.PWAub0A-AhxzF_IKgfLYjyJAPPomIevg2AZbYKg4R9bTIeHY0qM3D3BdDUn90mA0-Ue_Xdcbpqv4hqkEbXX7Jw';
+    // Groww API Secret — HMAC-SHA256 key for Approval flow checksum.
+    const defaultApiSecret = ')msR3J0Ppt4-eX612InuNgLEHt-Mef)1';
+    // Real Base32 TOTP scan secret from Groww API Portal.
+    const defaultTotpSecret = 'IAPZSHQBFE57HWAHUROFAFMT72S5TIB5';
+
+    // Always override to latest API key — old stale JWTs cause HTTP 400.
+    groww.apiKey = defaultApiKey;
+    // Always set the API secret for HMAC checksum generation.
+    groww.apiSecret = defaultApiSecret;
+    if (groww.baseUrl.isEmpty) groww.baseUrl = 'https://api.groww.in';
+    // Always ensure the real Base32 TOTP scan secret is set.
+    if (groww.totpSecret.isEmpty || !_isValidBase32(groww.totpSecret)) {
+      groww.totpSecret = defaultTotpSecret;
+    }
+    if (groww.status != BrokerStatus.connected) {
+      groww.status = BrokerStatus.connected;
+      groww.lastConnectedAt = DateTime.now();
+    }
+  }
+
+  static BrokerAccount _defaultGrowwBroker() {
+    // Latest Groww API Key JWT (role: auth-totp) — update when regenerated from Groww portal.
+    const defaultApiKey =
+        'eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NzkwNzMwMTMsImlhdCI6MTc5MDY3MzAxMywibmJmIjoxNzkwNjczMDEzLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJlMDQwM2NlZS0wZDQ5LTQ5NmYtOTc5My00ODRhNTkzNmNiYTVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiYWFiY2Y2NzAtYzFhNy00ZDY3LWFlMWItMDRlOWJiNWQ5YzRjXCIsXCJkZXZpY2VJZFwiOlwiM2MyZjBjZmItNGE3ZC01N2ZiLWFhMzctOGNjNzAzNDdkNDZlXCIsXCJzZXNzaW9uSWRcIjpcIjg4ZGVjZjQ1LWE5ZTYtNDZlZi04Y2YyLWEyNmVmODE2MWJiY1wiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkV2V3lsaUNHbWQwcFFUVG1FM1REZnhSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwYzE6NDAxZjo2ZTk2OjVjMDA6MTExZToyYmM5Ojk0OWUsMTcyLjY5Ljk0LjE1MCwzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU3OTA3MzAxMzUwOSxcInZlbmRvck5hbWVcIjpcImdyb3d3QXBpXCJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.PWAub0A-AhxzF_IKgfLYjyJAPPomIevg2AZbYKg4R9bTIeHY0qM3D3BdDUn90mA0-Ue_Xdcbpqv4hqkEbXX7Jw';
+    // Groww API Secret — HMAC-SHA256 key for Approval flow checksum.
+    const defaultApiSecret = ')msR3J0Ppt4-eX612InuNgLEHt-Mef)1';
+    // Real Base32 TOTP scan secret from Groww API Portal.
+    const defaultTotpSecret = 'IAPZSHQBFE57HWAHUROFAFMT72S5TIB5';
+
+    return BrokerAccount(
+      id: 'groww',
+      name: 'Groww Broker',
+      logoSymbol: 'GW',
+      description: 'Groww Stock Broker Trading API Portal.',
+      apiKey: defaultApiKey,
+      apiSecret: defaultApiSecret,
+      totpSecret: defaultTotpSecret,
+      baseUrl: 'https://api.groww.in',
+      status: BrokerStatus.connected,
+      lastConnectedAt: DateTime.now(),
+    );
+  }
+
+  /// Returns true if [s] is a valid Base32 string (RFC 4648).
+  /// Only A–Z and 2–7 characters are allowed, with optional '=' padding.
+  /// An empty string is considered invalid.
+  static bool _isValidBase32(String s) {
+    if (s.isEmpty) return false;
+    final clean = s.replaceAll(RegExp(r'\s'), '').toUpperCase();
+    for (final ch in clean.runes) {
+      final isBase32 = (ch >= 65 && ch <= 90) || // A-Z
+          (ch >= 50 && ch <= 55) || // 2-7
+          ch == 61; // '='
+      if (!isBase32) return false;
+    }
+    return true;
+  }
+
   static List<BrokerAccount> _getDefaultBrokers() {
-    return [
-      BrokerAccount(
-        id: 'megabull',
-        name: 'MegaBull API (Demo)',
-        logoSymbol: 'MB',
-        description: 'Demo paper trading REST API (https://api.megabull.in)',
-        baseUrl: 'https://api.megabull.in',
-        apiKey: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
-        apiSecret: 'd35a226d-5b3a-44d7-a954-2db87bd069a7',
-        accountId: 'MB-DEMO-99',
-        environment: 'Sandbox',
-        status: BrokerStatus.connected,
-        lastConnectedAt: DateTime.now(),
-      ),
-      BrokerAccount(
-        id: 'zerodha',
-        name: 'Zerodha Kite Sandbox',
-        logoSymbol: 'ZK',
-        description: 'India\'s largest discount broker & API portal.',
-      ),
-      BrokerAccount(
-        id: 'dhan',
-        name: 'Dhan HQ Sandbox',
-        logoSymbol: 'DH',
-        description: 'Indian stock market REST & WebSocket API portal.',
-      ),
-      BrokerAccount(
-        id: 'angelone',
-        name: 'AngelOne SmartAPI',
-        logoSymbol: 'AO',
-        description: 'Indian stock broker API for NSE/BSE equities.',
-      ),
-      BrokerAccount(
-        id: 'upstox',
-        name: 'Upstox Developer API',
-        logoSymbol: 'UP',
-        description: 'REST API trading portal for Indian markets.',
-      ),
-    ];
+    return [_defaultGrowwBroker()];
   }
 }

@@ -58,7 +58,7 @@ class OrderItem {
   }
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
-    // MegaBull API uses: id, instrumentToken, instrumentName, qty, type, orderType, price, triggerPrice, status
+    // Groww API JSON mapping
     final rawType = json['transactionType'] ?? json['type'] ?? 'BUY';
     final rawOrderType = json['orderType'] ?? json['executionType'] ?? 'LIMIT';
     return OrderItem(

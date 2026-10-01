@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'package:collection/collection.dart';
 import '../models/stock_model.dart';
-import 'megabull_api_service.dart';
 
 class StockService {
   static final Map<String, Stock> _cache = {};
@@ -79,21 +77,9 @@ class StockService {
               cleanSymbol.endsWith('.BO') ? 'BSE' : 'NSE';
 
           final String tickerOnly = cleanSymbol.replaceAll('.NS', '').replaceAll('.BO', '').trim().toUpperCase();
-          String csvToken = tickerOnly;
-
-          try {
-            final mbInstruments = await MegaBullApiService.fetchInstruments();
-            final matched = mbInstruments.firstWhereOrNull((inst) {
-              final sym = inst.symbol.replaceAll('.NS', '').replaceAll('.BO', '').trim().toUpperCase();
-              return sym == tickerOnly;
-            });
-            if (matched != null && matched.instrumentToken.isNotEmpty) {
-              csvToken = matched.instrumentToken;
-            }
-          } catch (_) {}
 
           final stock = Stock(
-            instrumentToken: csvToken,
+            instrumentToken: tickerOnly,
             symbol: cleanSymbol,
             name: meta['shortName'] ?? meta['longName'] ?? _getIndianStockName(cleanSymbol),
             exchange: exchangeName,
