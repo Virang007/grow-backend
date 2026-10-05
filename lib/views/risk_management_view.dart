@@ -24,6 +24,9 @@ class _RiskManagementViewState extends State<RiskManagementView> {
   @override
   void initState() {
     super.initState();
+    // Always delete any existing instance so we get fresh state
+    // when navigating to risk management for a different stock.
+    Get.delete<RiskManagementController>(force: true);
     controller = Get.put(RiskManagementController());
     controller.initialize(widget.stock, widget.tradeSide);
   }
@@ -116,7 +119,113 @@ class _RiskManagementViewState extends State<RiskManagementView> {
             ),
             const SizedBox(height: 20),
 
-            // Entry Price & Quantity Inputs
+            // Product / Order Type Selector (Intraday MIS vs Delivery CNC)
+            const Text(
+              'Order Product Type',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Obx(() {
+              final activeProduct = controller.productType.value;
+              return Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => controller.productType.value = 'MIS',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: activeProduct == 'MIS'
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFF1E222D),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: activeProduct == 'MIS'
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF2A2E39),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Intraday (MIS)',
+                              style: TextStyle(
+                                color: activeProduct == 'MIS'
+                                    ? Colors.white
+                                    : Colors.grey[400],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Same day square off',
+                              style: TextStyle(
+                                color: activeProduct == 'MIS'
+                                    ? Colors.white70
+                                    : Colors.grey[600],
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => controller.productType.value = 'CNC',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: activeProduct == 'CNC'
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFF1E222D),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: activeProduct == 'CNC'
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF2A2E39),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Delivery (CNC)',
+                              style: TextStyle(
+                                color: activeProduct == 'CNC'
+                                    ? Colors.white
+                                    : Colors.grey[400],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Hold multi-day',
+                              style: TextStyle(
+                                color: activeProduct == 'CNC'
+                                    ? Colors.white70
+                                    : Colors.grey[600],
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+            const SizedBox(height: 20),
+
+            // Entry Price & Quantity Inputs with +/- controls
             Row(
               children: [
                 Expanded(
@@ -128,10 +237,73 @@ class _RiskManagementViewState extends State<RiskManagementView> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildInputField(
-                    controller: controller.quantityController,
-                    label: 'Quantity (Shares)',
-                    onChanged: (_) => controller.recalculate(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Quantity (Shares)',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              final int current = int.tryParse(controller.quantityController.text) ?? 1;
+                              if (current > 1) {
+                                controller.quantityController.text = (current - 1).toString();
+                                controller.recalculate();
+                              }
+                            },
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.grey),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: TextField(
+                              controller: controller.quantityController,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 15),
+                              onChanged: (_) => controller.recalculate(),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: const Color(0xFF1E222D),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF2A2E39)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF2A2E39)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: () {
+                              final int current = int.tryParse(controller.quantityController.text) ?? 0;
+                              controller.quantityController.text = (current + 1).toString();
+                              controller.recalculate();
+                            },
+                            icon: const Icon(Icons.add_circle_outline, color: Colors.grey),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],

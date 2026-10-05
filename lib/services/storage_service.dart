@@ -72,20 +72,12 @@ class StorageService {
       if (encodedList != null && encodedList.isNotEmpty) {
         final loaded = encodedList
             .map((item) => BrokerAccount.fromJson(jsonDecode(item)))
-            .toList();
-
-        // Keep ONLY Groww broker
+            .toList();        // Keep ONLY Groww broker
         loaded.removeWhere((b) => b.id != 'groww');
 
         // Ensure Groww is present
         if (!loaded.any((b) => b.id == 'groww')) {
           loaded.add(_defaultGrowwBroker());
-        } else {
-          final groww = loaded.firstWhere((b) => b.id == 'groww');
-          // Always apply latest credentials (new API key + correct TOTP secret).
-          _ensureGrowwDefaults(groww);
-          // Persist any updates immediately so the app always runs with fresh creds.
-          await saveBrokers(loaded);
         }
         return loaded;
       }
@@ -97,51 +89,18 @@ class StorageService {
     return _getDefaultBrokers();
   }
 
-  /// Fills in any missing critical fields for a Groww broker with safe defaults.
-  static void _ensureGrowwDefaults(BrokerAccount groww) {
-    // Latest Groww API Key JWT (role: auth-totp) — update when regenerated from Groww portal.
-    const defaultApiKey =
-        'eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NzkwNzMwMTMsImlhdCI6MTc5MDY3MzAxMywibmJmIjoxNzkwNjczMDEzLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJlMDQwM2NlZS0wZDQ5LTQ5NmYtOTc5My00ODRhNTkzNmNiYTVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiYWFiY2Y2NzAtYzFhNy00ZDY3LWFlMWItMDRlOWJiNWQ5YzRjXCIsXCJkZXZpY2VJZFwiOlwiM2MyZjBjZmItNGE3ZC01N2ZiLWFhMzctOGNjNzAzNDdkNDZlXCIsXCJzZXNzaW9uSWRcIjpcIjg4ZGVjZjQ1LWE5ZTYtNDZlZi04Y2YyLWEyNmVmODE2MWJiY1wiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkV2V3lsaUNHbWQwcFFUVG1FM1REZnhSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwYzE6NDAxZjo2ZTk2OjVjMDA6MTExZToyYmM5Ojk0OWUsMTcyLjY5Ljk0LjE1MCwzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU3OTA3MzAxMzUwOSxcInZlbmRvck5hbWVcIjpcImdyb3d3QXBpXCJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.PWAub0A-AhxzF_IKgfLYjyJAPPomIevg2AZbYKg4R9bTIeHY0qM3D3BdDUn90mA0-Ue_Xdcbpqv4hqkEbXX7Jw';
-    // Groww API Secret — HMAC-SHA256 key for Approval flow checksum.
-    const defaultApiSecret = ')msR3J0Ppt4-eX612InuNgLEHt-Mef)1';
-    // Real Base32 TOTP scan secret from Groww API Portal.
-    const defaultTotpSecret = 'IAPZSHQBFE57HWAHUROFAFMT72S5TIB5';
-
-    // Always override to latest API key — old stale JWTs cause HTTP 400.
-    groww.apiKey = defaultApiKey;
-    // Always set the API secret for HMAC checksum generation.
-    groww.apiSecret = defaultApiSecret;
-    if (groww.baseUrl.isEmpty) groww.baseUrl = 'https://api.groww.in';
-    // Always ensure the real Base32 TOTP scan secret is set.
-    if (groww.totpSecret.isEmpty || !_isValidBase32(groww.totpSecret)) {
-      groww.totpSecret = defaultTotpSecret;
-    }
-    if (groww.status != BrokerStatus.connected) {
-      groww.status = BrokerStatus.connected;
-      groww.lastConnectedAt = DateTime.now();
-    }
-  }
-
   static BrokerAccount _defaultGrowwBroker() {
-    // Latest Groww API Key JWT (role: auth-totp) — update when regenerated from Groww portal.
-    const defaultApiKey =
-        'eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NzkwNzMwMTMsImlhdCI6MTc5MDY3MzAxMywibmJmIjoxNzkwNjczMDEzLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJlMDQwM2NlZS0wZDQ5LTQ5NmYtOTc5My00ODRhNTkzNmNiYTVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiYWFiY2Y2NzAtYzFhNy00ZDY3LWFlMWItMDRlOWJiNWQ5YzRjXCIsXCJkZXZpY2VJZFwiOlwiM2MyZjBjZmItNGE3ZC01N2ZiLWFhMzctOGNjNzAzNDdkNDZlXCIsXCJzZXNzaW9uSWRcIjpcIjg4ZGVjZjQ1LWE5ZTYtNDZlZi04Y2YyLWEyNmVmODE2MWJiY1wiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkV2V3lsaUNHbWQwcFFUVG1FM1REZnhSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwYzE6NDAxZjo2ZTk2OjVjMDA6MTExZToyYmM5Ojk0OWUsMTcyLjY5Ljk0LjE1MCwzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU3OTA3MzAxMzUwOSxcInZlbmRvck5hbWVcIjpcImdyb3d3QXBpXCJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.PWAub0A-AhxzF_IKgfLYjyJAPPomIevg2AZbYKg4R9bTIeHY0qM3D3BdDUn90mA0-Ue_Xdcbpqv4hqkEbXX7Jw';
-    // Groww API Secret — HMAC-SHA256 key for Approval flow checksum.
-    const defaultApiSecret = ')msR3J0Ppt4-eX612InuNgLEHt-Mef)1';
-    // Real Base32 TOTP scan secret from Groww API Portal.
-    const defaultTotpSecret = 'IAPZSHQBFE57HWAHUROFAFMT72S5TIB5';
-
     return BrokerAccount(
       id: 'groww',
       name: 'Groww Broker',
       logoSymbol: 'GW',
       description: 'Groww Stock Broker Trading API Portal.',
-      apiKey: defaultApiKey,
-      apiSecret: defaultApiSecret,
-      totpSecret: defaultTotpSecret,
+      apiKey: '',
+      apiSecret: '',
+      totpSecret: '',
       baseUrl: 'https://api.groww.in',
-      status: BrokerStatus.connected,
-      lastConnectedAt: DateTime.now(),
+      status: BrokerStatus.disconnected,
+      lastConnectedAt: null,
     );
   }
 

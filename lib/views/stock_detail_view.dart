@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../models/stock_model.dart';
 import '../models/risk_calculation.dart';
 import '../controllers/watchlist_controller.dart';
+import '../controllers/broker_controller.dart';
+import '../services/groww_service.dart';
 import '../widgets/stock_chart_widget.dart';
 import 'risk_management_view.dart';
 
@@ -16,14 +18,74 @@ class StockDetailView extends StatefulWidget {
 }
 
 class _StockDetailViewState extends State<StockDetailView> {
-  String _selectedPeriod = '1D';
+  final RxString _selectedPeriod = '1D'.obs;
+
+  // Groww LTP reactive state
+  final Rxn<double> _growwLtp = Rxn<double>(); // null = not yet fetched / unavailable
+  final RxBool _ltpLoading = false.obs;       // true while LTP call is in-flight
+  final RxBool _ltpFetched = false.obs;       // true once we have a definitive result
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchGrowwLtp();
+  }
+
+  /// Checks if [instrumentToken] looks like a Groww symbol (EXCHANGE_SYMBOL)
+  /// and calls Groww LTP API if so.
+  Future<void> _fetchGrowwLtp() async {
+    final String token = widget.stock.instrumentToken;
+    // Groww symbols contain underscore: NSE_RELIANCE, BSE_TCS, etc.
+    if (!token.contains('_')) return;
+
+    _ltpLoading.value = true;
+
+    try {
+      final BrokerController brokerCtrl = Get.find<BrokerController>();
+      final growwBroker = brokerCtrl.growwBroker;
+
+      if (growwBroker == null ||
+          growwBroker.apiKey.isEmpty ||
+          growwBroker.totpSecret.isEmpty) {
+        print('[LTP] Groww credentials not configured — skipping LTP call');
+        return;
+      }
+
+      final service = GrowwBrokerService(
+        apiKey: growwBroker.apiKey,
+        totpSecret: growwBroker.totpSecret,
+        baseUrl: growwBroker.baseUrl,
+      );
+
+      // Use cached token from BrokerController if available
+      final cachedToken = brokerCtrl.currentAccessToken.value;
+
+      final double? ltp = await service.fetchLTP(
+        growwSymbol: token,
+        accessToken: cachedToken.isNotEmpty ? cachedToken : null,
+      );
+
+      _growwLtp.value = ltp;
+      _ltpFetched.value = true;
+    } catch (e) {
+      print('[LTP EXCEPTION] $e');
+    } finally {
+      _ltpLoading.value = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final WatchlistController watchlistController = Get.find<WatchlistController>();
-    final bool isPositive = widget.stock.change >= 0;
+    final WatchlistController watchlistController =
+        Get.find<WatchlistController>();
+
+    // Use Groww LTP if available, fall back to Yahoo Finance price
+    final double displayPrice = _growwLtp.value ?? widget.stock.price;
+    final bool isPositive = displayPrice >= widget.stock.price - (widget.stock.price * 0.5)
+        ? widget.stock.change >= 0
+        : false;
     final Color priceColor =
-        isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+        widget.stock.change >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
@@ -137,62 +199,130 @@ class _StockDetailViewState extends State<StockDetailView> {
             const SizedBox(height: 20),
 
             // Live Price & Change in ₹ INR
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  '₹${widget.stock.price.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 34,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: priceColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isPositive
-                            ? Icons.arrow_drop_up
-                            : Icons.arrow_drop_down,
-                        color: priceColor,
-                        size: 20,
-                      ),
-                      Text(
-                        '${isPositive ? "+" : ""}₹${widget.stock.change.toStringAsFixed(2)} (${isPositive ? "+" : ""}${widget.stock.percentChange.toStringAsFixed(2)}%)',
-                        style: TextStyle(
-                          color: priceColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+            Obx(() {
+              final double displayPrice = _growwLtp.value ?? widget.stock.price;
+              final bool ltpLoading = _ltpLoading.value;
+              final bool ltpFetched = _ltpFetched.value;
+              final double? growwLtp = _growwLtp.value;
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  // ── Price ────────────────────────────────────────────
+                  ltpLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF2563EB),
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Text(
+                          '₹${displayPrice.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 34,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                  const SizedBox(width: 10),
+                  // ── LIVE badge (Groww LTP source indicator) ──────────
+                  if (ltpFetched && growwLtp != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.4),
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'GROWW LIVE',
+                            style: TextStyle(
+                              color: Color(0xFF10B981),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (ltpFetched && growwLtp == null)
+                    // Fallback badge when Groww LTP was unavailable
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Yahoo Finance',
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }),
+            const SizedBox(height: 8),
+            // Change row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: priceColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    widget.stock.change >= 0
+                        ? Icons.arrow_drop_up
+                        : Icons.arrow_drop_down,
+                    color: priceColor,
+                    size: 20,
                   ),
-                ),
-              ],
+                  Text(
+                    '${widget.stock.change >= 0 ? "+" : ""}₹${widget.stock.change.toStringAsFixed(2)} (${widget.stock.change >= 0 ? "+" : ""}${widget.stock.percentChange.toStringAsFixed(2)}%)',
+                    style: TextStyle(
+                      color: priceColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
 
             // Time Period Selector
-            Row(
+            Obx(() => Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: ['1D', '1W', '1M', '1Y', 'ALL'].map((period) {
-                final isSelected = _selectedPeriod == period;
+                final isSelected = _selectedPeriod.value == period;
                 return GestureDetector(
                   onTap: () {
-                    setState(() {
-                      _selectedPeriod = period;
-                    });
+                    _selectedPeriod.value = period;
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -215,7 +345,7 @@ class _StockDetailViewState extends State<StockDetailView> {
                   ),
                 );
               }).toList(),
-            ),
+            )),
             const SizedBox(height: 20),
 
             // Chart

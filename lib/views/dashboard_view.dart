@@ -10,24 +10,24 @@ import 'orders_view.dart';
 import 'portfolio_view.dart';
 import 'broker_settings_page.dart';
 
-class DashboardView extends StatefulWidget {
+/// Main dashboard with bottom navigation.
+///
+/// Fully StatelessWidget — tab index is managed by [HomeController.currentTabIndex]
+/// (RxInt) so only the BottomNavigationBar and IndexedStack rebuild on tab change,
+/// not the entire widget tree.
+class DashboardView extends StatelessWidget {
   const DashboardView({super.key});
-
-  @override
-  State<DashboardView> createState() => _DashboardViewState();
-}
-
-class _DashboardViewState extends State<DashboardView> {
-  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final BrokerController brokerController = Get.find<BrokerController>();
-    final WatchlistController watchlistController = Get.find<WatchlistController>();
+    final WatchlistController watchlistController =
+        Get.find<WatchlistController>();
     final HomeController homeController = Get.find<HomeController>();
 
     final List<Widget> pages = [
-      _buildHomeDashboard(context, brokerController, homeController, watchlistController),
+      _buildHomeDashboard(
+          context, brokerController, homeController, watchlistController),
       _buildWatchlistView(watchlistController),
       const OrdersView(),
       const PortfolioView(),
@@ -35,73 +35,71 @@ class _DashboardViewState extends State<DashboardView> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
-      ),
+      body: Obx(() => IndexedStack(
+            index: homeController.currentTabIndex.value,
+            children: pages,
+          )),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF161B22),
           border: Border(top: BorderSide(color: Color(0xFF2A2E39), width: 1)),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          backgroundColor: const Color(0xFF161B22),
-          selectedItemColor: const Color(0xFF2563EB),
-          unselectedItemColor: Colors.grey[500],
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-          items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home, color: Color(0xFF2563EB)),
-              label: 'Home',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.bookmark_outline),
-              activeIcon: Icon(Icons.bookmark, color: Color(0xFF2563EB)),
-              label: 'Watchlist',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined),
-              activeIcon: Icon(Icons.assignment, color: Color(0xFF2563EB)),
-              label: 'Orders',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              activeIcon: Icon(Icons.account_balance_wallet, color: Color(0xFF2563EB)),
-              label: 'Portfolio',
-            ),
-            BottomNavigationBarItem(
-              icon: Obx(() {
-                final count = brokerController.connectedCount.value;
-                return Badge(
-                  isLabelVisible: count > 0,
-                  backgroundColor: const Color(0xFF10B981),
-                  label: Text('$count'),
-                  child: const Icon(Icons.account_balance_outlined),
-                );
-              }),
-              activeIcon: Obx(() {
-                final count = brokerController.connectedCount.value;
-                return Badge(
-                  isLabelVisible: count > 0,
-                  backgroundColor: const Color(0xFF10B981),
-                  label: Text('$count'),
-                  child: const Icon(Icons.account_balance, color: Color(0xFF2563EB)),
-                );
-              }),
-              label: 'Broker API',
-            ),
-          ],
-        ),
+        child: Obx(() => BottomNavigationBar(
+              currentIndex: homeController.currentTabIndex.value,
+              onTap: (index) => homeController.currentTabIndex.value = index,
+              backgroundColor: const Color(0xFF161B22),
+              selectedItemColor: const Color(0xFF2563EB),
+              unselectedItemColor: Colors.grey[500],
+              selectedFontSize: 11,
+              unselectedFontSize: 11,
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home, color: Color(0xFF2563EB)),
+                  label: 'Home',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.bookmark_outline),
+                  activeIcon: Icon(Icons.bookmark, color: Color(0xFF2563EB)),
+                  label: 'Watchlist',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.assignment_outlined),
+                  activeIcon: Icon(Icons.assignment, color: Color(0xFF2563EB)),
+                  label: 'Orders',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.account_balance_wallet_outlined),
+                  activeIcon: Icon(Icons.account_balance_wallet,
+                      color: Color(0xFF2563EB)),
+                  label: 'Portfolio',
+                ),
+                BottomNavigationBarItem(
+                  icon: Obx(() {
+                    final count = brokerController.connectedCount.value;
+                    return Badge(
+                      isLabelVisible: count > 0,
+                      backgroundColor: const Color(0xFF10B981),
+                      label: Text('$count'),
+                      child: const Icon(Icons.account_balance_outlined),
+                    );
+                  }),
+                  activeIcon: Obx(() {
+                    final count = brokerController.connectedCount.value;
+                    return Badge(
+                      isLabelVisible: count > 0,
+                      backgroundColor: const Color(0xFF10B981),
+                      label: Text('$count'),
+                      child: const Icon(Icons.account_balance,
+                          color: Color(0xFF2563EB)),
+                    );
+                  }),
+                  label: 'Broker API',
+                ),
+              ],
+            )),
       ),
     );
   }
@@ -144,7 +142,8 @@ class _DashboardViewState extends State<DashboardView> {
                             const SizedBox(height: 2),
                             Text(
                               'Indian Stock Market Shares & SL/TP Calculator',
-                              style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                              style: TextStyle(
+                                  color: Colors.grey[400], fontSize: 11),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -155,18 +154,18 @@ class _DashboardViewState extends State<DashboardView> {
                       Obx(() {
                         final count = brokerController.connectedCount.value;
                         return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _currentIndex = 4; // Navigate to Broker Settings tab
-                            });
-                          },
+                          // Navigate directly via RxInt — no setState
+                          onTap: () =>
+                              homeController.currentTabIndex.value = 4,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: count > 0
-                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                  : const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                  ? const Color(0xFF10B981)
+                                      .withValues(alpha: 0.15)
+                                  : const Color(0xFFEF4444)
+                                      .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: count > 0
@@ -177,7 +176,9 @@ class _DashboardViewState extends State<DashboardView> {
                             child: Row(
                               children: [
                                 Icon(
-                                  count > 0 ? Icons.cloud_done : Icons.cloud_off,
+                                  count > 0
+                                      ? Icons.cloud_done
+                                      : Icons.cloud_off,
                                   size: 14,
                                   color: count > 0
                                       ? const Color(0xFF10B981)
@@ -207,16 +208,18 @@ class _DashboardViewState extends State<DashboardView> {
               // Search Launcher Bar (Primary Action)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: GestureDetector(
                     onTap: () => Get.to(() => const SearchView()),
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         color: const Color(0xFF161B22),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF2563EB), width: 1.5),
+                        border: Border.all(
+                            color: const Color(0xFF2563EB), width: 1.5),
                       ),
                       child: Row(
                         children: [
@@ -225,14 +228,15 @@ class _DashboardViewState extends State<DashboardView> {
                           Expanded(
                             child: Text(
                               'Search Indian stock (e.g. RELIANCE, TCS, INFY)...',
-                              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                              style: TextStyle(
+                                  color: Colors.grey[400], fontSize: 13),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Container(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFF2563EB),
                               borderRadius: BorderRadius.circular(6),
@@ -253,19 +257,23 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
 
-              // Live Market Indices Ribbon (NIFTY 50, SENSEX, BANK NIFTY)
+              // Live Market Indices Ribbon
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 96,
                   child: Obx(() {
-                    if (homeController.isIndicesLoading.value && homeController.marketIndices.isEmpty) {
+                    if (homeController.isIndicesLoading.value &&
+                        homeController.marketIndices.isEmpty) {
                       return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
                           color: const Color(0xFF161B22),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF2A2E39)),
+                          border:
+                              Border.all(color: const Color(0xFF2A2E39)),
                         ),
                         child: Row(
                           children: [
@@ -280,7 +288,8 @@ class _DashboardViewState extends State<DashboardView> {
                             const SizedBox(width: 10),
                             Text(
                               'Loading live market indices...',
-                              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                              style: TextStyle(
+                                  color: Colors.grey[400], fontSize: 12),
                             ),
                           ],
                         ),
@@ -289,33 +298,43 @@ class _DashboardViewState extends State<DashboardView> {
 
                     return ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
                       itemCount: homeController.marketIndices.length,
                       itemBuilder: (context, index) {
                         final idx = homeController.marketIndices[index];
                         final bool isPositive = idx.change >= 0;
-                        final Color color = isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+                        final Color color = isPositive
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFFEF4444);
 
-                        String cleanName = idx.symbol.replaceAll('^', '');
+                        String cleanName =
+                            idx.symbol.replaceAll('^', '');
                         if (cleanName == 'NSEI') cleanName = 'NIFTY 50';
                         if (cleanName == 'BSESN') cleanName = 'SENSEX';
-                        if (cleanName == 'NSEBANK') cleanName = 'BANK NIFTY';
+                        if (cleanName == 'NSEBANK') {
+                          cleanName = 'BANK NIFTY';
+                        }
 
                         return Container(
                           width: 160,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          margin:
+                              const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: const Color(0xFF161B22),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF2A2E39)),
+                            border: Border.all(
+                                color: const Color(0xFF2A2E39)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     cleanName,
@@ -326,7 +345,9 @@ class _DashboardViewState extends State<DashboardView> {
                                     ),
                                   ),
                                   Icon(
-                                    isPositive ? Icons.trending_up : Icons.trending_down,
+                                    isPositive
+                                        ? Icons.trending_up
+                                        : Icons.trending_down,
                                     color: color,
                                     size: 16,
                                   ),
@@ -373,12 +394,11 @@ class _DashboardViewState extends State<DashboardView> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Obx(() {
-                        return Text(
-                          '${homeController.marketStocks.length} Shares',
-                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                        );
-                      }),
+                      Obx(() => Text(
+                            '${homeController.marketStocks.length} Shares',
+                            style: TextStyle(
+                                color: Colors.grey[400], fontSize: 12),
+                          )),
                     ],
                   ),
                 ),
@@ -386,12 +406,14 @@ class _DashboardViewState extends State<DashboardView> {
 
               // Live Market Stocks Feed
               Obx(() {
-                if (homeController.isLoading.value && homeController.marketStocks.isEmpty) {
+                if (homeController.isLoading.value &&
+                    homeController.marketStocks.isEmpty) {
                   return const SliverToBoxAdapter(
                     child: Center(
                       child: Padding(
                         padding: EdgeInsets.all(30),
-                        child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF2563EB)),
                       ),
                     ),
                   );
@@ -409,7 +431,8 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                       child: Column(
                         children: [
-                          Icon(Icons.show_chart, size: 44, color: Colors.grey[600]),
+                          Icon(Icons.show_chart,
+                              size: 44, color: Colors.grey[600]),
                           const SizedBox(height: 12),
                           const Text(
                             'No Market Data Loaded',
@@ -423,7 +446,8 @@ class _DashboardViewState extends State<DashboardView> {
                           Text(
                             'Tap the search bar above to search for any Indian stock share (e.g. RELIANCE, TCS, INFY).',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                            style: TextStyle(
+                                color: Colors.grey[400], fontSize: 12),
                           ),
                         ],
                       ),
@@ -520,7 +544,8 @@ class _DashboardViewState extends State<DashboardView> {
         border: Border.all(color: const Color(0xFF2A2E39)),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         onTap: () {
           Get.to(() => StockDetailView(stock: stock));
         },
@@ -535,7 +560,10 @@ class _DashboardViewState extends State<DashboardView> {
           alignment: Alignment.center,
           child: Text(
             stock.displaySymbol.substring(
-                0, stock.displaySymbol.length > 3 ? 3 : stock.displaySymbol.length),
+                0,
+                stock.displaySymbol.length > 3
+                    ? 3
+                    : stock.displaySymbol.length),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -559,7 +587,8 @@ class _DashboardViewState extends State<DashboardView> {
             ),
             const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
                 color: const Color(0xFF2563EB).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4),
@@ -581,7 +610,8 @@ class _DashboardViewState extends State<DashboardView> {
                 return Icon(
                   saved ? Icons.bookmark : Icons.bookmark_border,
                   size: 18,
-                  color: saved ? const Color(0xFF2563EB) : Colors.grey[500],
+                  color:
+                      saved ? const Color(0xFF2563EB) : Colors.grey[500],
                 );
               }),
             ),
@@ -607,7 +637,8 @@ class _DashboardViewState extends State<DashboardView> {
             ),
             const SizedBox(height: 2),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),

@@ -18,12 +18,14 @@ class GrowwBrokerService implements BrokerService {
   final String apiKey;     // Groww TOTP Token
   final String apiSecret;  // Unused / Legacy
   final String totpSecret; // Groww TOTP Base32 Secret
+  final String savedAccessToken; // Saved Groww Access Token
   final String baseUrl;
 
   GrowwBrokerService({
     required this.apiKey,
     this.apiSecret = '',
     this.totpSecret = '',
+    this.savedAccessToken = '',
     this.baseUrl = 'https://api.groww.in',
   });
 
@@ -189,6 +191,123 @@ class GrowwBrokerService implements BrokerService {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // GET OR REFRESH ACCESS TOKEN
+  // Re-generates a fresh token from TOTP credentials on demand.
+  // This allows LTP + Order APIs to work without manual reconnect.
+  // ─────────────────────────────────────────────────────────────────
+  Future<String?> getOrRefreshToken() async {
+    if (apiKey.isEmpty || totpSecret.isEmpty) return null;
+    try {
+      final token = await generateAccessToken(
+        growwTotpToken: apiKey,
+        growwTotpSecret: totpSecret,
+        baseUrl: baseUrl,
+      );
+      print('[GROWW LTP] ✅ Refreshed access token successfully');
+      return token;
+    } catch (e) {
+      print('[GROWW LTP] ❌ Token refresh failed: $e');
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // FETCH LIVE TRADED PRICE (LTP)
+  // GET /v1/live-data/ltp
+  // Returns the last traded price in INR for a given Groww symbol.
+  //
+  // [growwSymbol] — format: NSE_RELIANCE, BSE_TCS, etc.
+  // [accessToken] — a valid Groww access token. If null, one is
+  //                 generated automatically from stored TOTP credentials.
+  //
+  // Returns null on any error (caller should fall back to Yahoo price).
+  // ─────────────────────────────────────────────────────────────────
+  Future<double?> fetchLTP({
+    required String growwSymbol,
+    String? accessToken,
+  }) async {
+    String? token = accessToken;
+    token ??= await getOrRefreshToken();
+
+    if (token == null || token.isEmpty) {
+      print('[GROWW LTP] ❌ No access token available for LTP call');
+      return null;
+    }
+
+    // Groww LTP endpoint accepts one or more symbols as query params.
+    // Format: GET /v1/live-data/ltp?isin=NSE_RELIANCE
+    final url = Uri.parse('$baseUrl/v1/live-data/ltp').replace(
+      queryParameters: {'isin': growwSymbol.toUpperCase()},
+    );
+
+    print('[GROWW LTP] Fetching LTP for $growwSymbol → $url');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'X-API-VERSION': '1.0',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      print('[GROWW LTP] HTTP ${response.statusCode} — ${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final dynamic data = jsonDecode(response.body);
+
+        // Groww LTP response shapes observed in the wild:
+        // 1. { "ltp": 2334.20 }
+        // 2. { "data": { "ltp": 2334.20 } }
+        // 3. { "result": [{ "ltp": 2334.20, "symbol": "NSE_RELIANCE" }] }
+        // 4. { "response": { "data": [{ "ltp": 2334.20 }] } }
+        double? ltp;
+
+        if (data is Map) {
+          ltp = _extractLtpFromMap(Map<String, dynamic>.from(data));
+        } else if (data is List && data.isNotEmpty) {
+          final first = data[0];
+          if (first is Map) ltp = _extractLtpFromMap(Map<String, dynamic>.from(first));
+        }
+
+        if (ltp != null && ltp > 0) {
+          print('[GROWW LTP] ✅ LTP for $growwSymbol = ₹$ltp');
+          return ltp;
+        } else {
+          print('[GROWW LTP] ⚠️ LTP parsed as null/zero from body: ${response.body}');
+          return null;
+        }
+      } else {
+        final errDetail = _extractGrowwError(response);
+        print('[GROWW LTP] ❌ HTTP ${response.statusCode} — $errDetail');
+        return null;
+      }
+    } catch (e) {
+      print('[GROWW LTP EXCEPTION] $e');
+      return null;
+    }
+  }
+
+  /// Extracts ltp value from any level of Map nesting.
+  double? _extractLtpFromMap(Map<String, dynamic> map) {
+    // Direct ltp key
+    if (map['ltp'] != null) return (map['ltp'] as num?)?.toDouble();
+    if (map['lastTradedPrice'] != null) return (map['lastTradedPrice'] as num?)?.toDouble();
+    if (map['price'] != null) return (map['price'] as num?)?.toDouble();
+
+    // One level deeper
+    final data = map['data'] ?? map['response'] ?? map['result'];
+    if (data is Map) {
+      return _extractLtpFromMap(data as Map<String, dynamic>);
+    } else if (data is List && data.isNotEmpty) {
+      final first = data[0];
+      if (first is Map) return _extractLtpFromMap(first as Map<String, dynamic>);
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // VALIDATE CREDENTIALS (BrokerService interface)
   // Runs TOTP → generateAccessToken → validate flow
   // ─────────────────────────────────────────────────────────────────
@@ -219,37 +338,63 @@ class GrowwBrokerService implements BrokerService {
   // ─────────────────────────────────────────────────────────────────
   @override
   Future<OrderResult> placeRiskManagedOrder(OrderRequest request) async {
-    if (apiKey.isEmpty || totpSecret.isEmpty) {
-      return _failure('Groww TOTP Token or Secret is not configured. Please update Broker Settings.');
+    // 1. Check if saved access token exists
+    String tokenToUse = savedAccessToken.trim();
+
+    // 2. If no saved access token, fail immediately with clear session error
+    if (tokenToUse.isEmpty) {
+      print('[GROWW ORDER ERROR] No saved Groww access token found.');
+      return _failure('Groww session expired or not connected. Please connect Groww in Broker Settings.');
     }
 
     print('==================================================');
-    print('[GROWW] Authenticating order with TOTP flow...');
-    String? accessToken;
+    print('[GROWW ORDER] Placing order using saved ACCESS_TOKEN: ${_mask(tokenToUse)}');
+    print('==================================================');
 
-    try {
-      accessToken = await generateAccessToken(
-        growwTotpToken: apiKey,
-        growwTotpSecret: totpSecret,
-        baseUrl: baseUrl,
-      );
-    } catch (e) {
-      return _failure('Groww Auth Failed: $e');
+    // 3. Attempt order placement using saved token directly
+    OrderResult result = await _placeOrder(request, tokenToUse);
+
+    // 4. If order failed due to 401 / token expiration, attempt single re-authentication fallback
+    if (!result.isSuccess && _isAuthError(result.message)) {
+      print('[GROWW ORDER] Saved token rejected (401/Auth failure). Attempting 1-time token refresh...');
+
+      if (apiKey.isEmpty || totpSecret.isEmpty) {
+        return _failure('Groww session expired. Re-authentication failed: missing TOTP credentials.');
+      }
+
+      try {
+        final newToken = await generateAccessToken(
+          growwTotpToken: apiKey,
+          growwTotpSecret: totpSecret,
+          baseUrl: baseUrl,
+        );
+
+        if (newToken != null && newToken.isNotEmpty) {
+          print('[GROWW ORDER] Token refresh successful. Retrying order once...');
+          result = await _placeOrder(request, newToken);
+        } else {
+          return _failure('Groww session expired. Could not refresh token. Please reconnect in Broker Settings.');
+        }
+      } catch (e) {
+        print('[GROWW ORDER ERROR] Token refresh retry failed: $e');
+        return _failure('Groww session expired. Token refresh failed: $e');
+      }
     }
 
-    if (accessToken == null || accessToken.isEmpty) {
-      return _failure('Groww Auth Failed: Could not generate ACCESS_TOKEN.');
-    }
+    return result;
+  }
 
-    final bool valid = await _validateAccessToken(accessToken);
-    if (!valid) {
-      return _failure(
-        'Groww Session Invalid: ACCESS_TOKEN failed /v1/user/detail check. Session may be revoked.',
-      );
-    }
+  bool _isAuthError(String message) {
+    // GA005 = "No registered IPs" — this is a config error, NOT a token/auth
+    // expiry. Never retry on this; show a clear user message instead.
+    if (message.contains('[GA005]')) return false;
 
-    // ── Place Order ──────────────────────────────────────────────
-    return _placeOrder(request, accessToken);
+    final lower = message.toLowerCase();
+    return lower.contains('401') ||
+        lower.contains('unauthorized') ||
+        lower.contains('token expired') ||
+        lower.contains('invalid token') ||
+        lower.contains('session invalid');
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -271,6 +416,8 @@ class GrowwBrokerService implements BrokerService {
     final String orderRefId = 'RMA-${DateTime.now().millisecondsSinceEpoch}';
     final String url = '$baseUrl/v1/order/create';
 
+    final String product = request.productType.isNotEmpty ? request.productType : 'MIS';
+
     // Groww documented snake_case payload — NO stopLoss / targetPrice in this call
     final Map<String, dynamic> bodyMap = {
       'trading_symbol': tradingSymbol,
@@ -279,7 +426,7 @@ class GrowwBrokerService implements BrokerService {
       'validity': 'DAY',
       'exchange': exchange,
       'segment': 'CASH',
-      'product': 'CNC',
+      'product': product,
       'order_type': 'LIMIT',
       'transaction_type': transactionType,
       'order_reference_id': orderRefId,
@@ -369,28 +516,55 @@ class GrowwBrokerService implements BrokerService {
       );
 
   /// Extracts human-readable error text from a Groww error response.
-  /// Handles Groww's nested: {"errorCode":401,"errorMessage":{"message":"..."}}
-  String _extractGrowwError(http.Response response) {
+  /// Handles Groww's nested: {"errorCode":401,"errorMessage":{"message":"..."},"code":"GA005"}
+  ({String message, String? code}) _extractGrowwError(http.Response response) {
     try {
       final dynamic body = jsonDecode(response.body);
       if (body is Map) {
+        // Extract error code (e.g. "GA005")
+        final String? code = (body['code'] ?? body['errorCode']?.toString())?.toString();
+
+        // Extract human message from nested or flat fields
         final dynamic errField = body['errorMessage'];
+        String msg;
         if (errField is Map && errField['message'] != null) {
-          return errField['message'].toString();
+          msg = errField['message'].toString();
         } else if (errField is String) {
-          return errField;
+          msg = errField;
+        } else {
+          final dynamic flat = body['message'] ?? body['error'] ?? body['errMsg'];
+          msg = flat?.toString() ?? '';
         }
-        final dynamic flat = body['message'] ?? body['error'] ?? body['errMsg'];
-        if (flat != null) return flat.toString();
+
+        if (msg.isEmpty) {
+          msg = response.body.length > 200
+              ? response.body.substring(0, 200)
+              : response.body;
+        }
+        return (message: msg, code: code);
       }
     } catch (_) {}
-    return response.body.length > 200
+    final raw = response.body.length > 200
         ? response.body.substring(0, 200)
         : response.body;
+    return (message: raw, code: null);
   }
 
   String _buildErrorMsg(http.Response response, dynamic data) {
-    String base = _extractGrowwError(response);
+    final extracted = _extractGrowwError(response);
+    final String base = extracted.message;
+    final String? code = extracted.code;
+
+    // ── GA005: IP not registered — config error, never retry ──────────
+    if (code == 'GA005' ||
+        base.toLowerCase().contains('no registered ip') ||
+        base.toLowerCase().contains('registered ips found')) {
+      print('[GROWW ORDER ERROR] ❌ GA005 — IP not registered. Halting retry.');
+      return '[GA005] Your IP is not registered with Groww API. '
+          'Please go to Groww API Settings → Allowed IPs and add your current IP address. '
+          'Then reconnect in Broker Settings.';
+    }
+
     if (response.statusCode == 401) {
       return 'Groww 401 Unauthorized: $base — ACCESS_TOKEN rejected. Re-authenticate.';
     } else if (response.statusCode == 403) {

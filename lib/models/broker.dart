@@ -11,6 +11,7 @@ class BrokerAccount {
   String accountId;
   String baseUrl;
   String environment; // Sandbox / Live
+  String accessToken; // Saved Groww Access Token (generated on connect)
   BrokerStatus status;
   DateTime? lastConnectedAt;
   bool isCustom;
@@ -26,6 +27,7 @@ class BrokerAccount {
     this.accountId = '',
     this.baseUrl = '',
     this.environment = 'Sandbox',
+    this.accessToken = '',
     this.status = BrokerStatus.disconnected,
     this.lastConnectedAt,
     this.isCustom = false,
@@ -43,6 +45,7 @@ class BrokerAccount {
       'accountId': accountId,
       'baseUrl': baseUrl,
       'environment': environment,
+      'accessToken': accessToken,
       'status': status.name,
       'lastConnectedAt': lastConnectedAt?.toIso8601String(),
       'isCustom': isCustom,
@@ -61,6 +64,7 @@ class BrokerAccount {
       accountId: json['accountId'] ?? '',
       baseUrl: json['baseUrl'] ?? '',
       environment: json['environment'] ?? 'Sandbox',
+      accessToken: json['accessToken'] ?? '',
       status: BrokerStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => BrokerStatus.disconnected,

@@ -8,6 +8,9 @@ class HomeController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxBool isIndicesLoading = false.obs;
 
+  /// Current bottom-nav tab index — replaces setState in DashboardView.
+  final RxInt currentTabIndex = 0.obs;
+
   static final List<String> topMarketSymbols = [
     'RELIANCE.NS',
     'TCS.NS',

@@ -5,6 +5,7 @@ import '../models/risk_calculation.dart';
 import '../models/order_request.dart';
 import '../models/order_result.dart';
 import '../models/order_model.dart';
+import '../models/broker.dart';
 import '../services/broker_service.dart';
 import '../services/groww_service.dart';
 import '../controllers/broker_controller.dart';
@@ -22,6 +23,7 @@ class RiskManagementController extends GetxController {
   final TextEditingController bufferController = TextEditingController(text: '2.00');
 
   final Rx<RiskMethod> selectedMethod = RiskMethod.RR_1_2.obs;
+  final RxString productType = 'MIS'.obs; // Default: Intraday (MIS)
   final RxBool isSubmitting = false.obs;
   final Rxn<RiskCalculation> calculation = Rxn<RiskCalculation>();
 
@@ -59,7 +61,6 @@ class RiskManagementController extends GetxController {
 
     switch (method) {
       case RiskMethod.SWING_LOW:
-        // BUY: SL = swing low (must be below entry)
         final double rawSwingLow = stock.swingLow > 0 ? stock.swingLow : entry * 0.97;
         if (rawSwingLow >= entry) {
           stopLossController.text = (entry * 0.97).toStringAsFixed(2);
@@ -70,7 +71,6 @@ class RiskManagementController extends GetxController {
         break;
 
       case RiskMethod.SWING_HIGH:
-        // SELL: SL = swing high (must be above entry)
         final double rawSwingHigh = stock.swingHigh > 0 ? stock.swingHigh : entry * 1.03;
         if (rawSwingHigh <= entry) {
           stopLossController.text = (entry * 1.03).toStringAsFixed(2);
@@ -81,24 +81,14 @@ class RiskManagementController extends GetxController {
         break;
 
       case RiskMethod.PREV_CANDLE:
-        // BUY: Previous Candle Low - Buffer
-        // SELL: Previous Candle High + Buffer
         if (tradeSide == TradeSide.BUY) {
           final double baseLow = stock.low > 0 ? stock.low : entry * 0.98;
           final double slVal = baseLow - buffer;
-          if (slVal >= entry) {
-            stopLossController.text = (entry - buffer).toStringAsFixed(2);
-          } else {
-            stopLossController.text = slVal.toStringAsFixed(2);
-          }
+          stopLossController.text = (slVal >= entry ? entry - buffer : slVal).toStringAsFixed(2);
         } else {
           final double baseHigh = stock.high > 0 ? stock.high : entry * 1.02;
           final double slVal = baseHigh + buffer;
-          if (slVal <= entry) {
-            stopLossController.text = (entry + buffer).toStringAsFixed(2);
-          } else {
-            stopLossController.text = slVal.toStringAsFixed(2);
-          }
+          stopLossController.text = (slVal <= entry ? entry + buffer : slVal).toStringAsFixed(2);
         }
         break;
 
@@ -138,14 +128,11 @@ class RiskManagementController extends GetxController {
     final RiskMethod method = selectedMethod.value;
 
     // ── Validate SL direction ──────────────────────────
-    // Auto-correct only when using a non-custom method
     if (method != RiskMethod.CUSTOM) {
       if (tradeSide == TradeSide.BUY && sl >= entry) {
-        // SL must be below entry for BUY
         sl = entry * 0.98;
         stopLossController.text = sl.toStringAsFixed(2);
       } else if (tradeSide == TradeSide.SELL && sl <= entry) {
-        // SL must be above entry for SELL
         sl = entry * 1.02;
         stopLossController.text = sl.toStringAsFixed(2);
       }
@@ -162,7 +149,7 @@ class RiskManagementController extends GetxController {
         tradeSide: tradeSide,
         entryPrice: entry,
         stopLoss: sl,
-        targetPrice: entry, // TP = Entry = invalid, will show error
+        targetPrice: entry,
         quantity: qty,
         riskMethod: method,
       );
@@ -171,36 +158,30 @@ class RiskManagementController extends GetxController {
 
     // ── Compute target price ───────────────────────────
     double tp;
-
     if (tradeSide == TradeSide.BUY) {
       switch (method) {
         case RiskMethod.RR_1_1:
-          tp = entry + riskPerShare * 1.0; // 1:1 — reward = risk
+          tp = entry + riskPerShare * 1.0;
           break;
         case RiskMethod.RR_1_2:
-          tp = entry + riskPerShare * 2.0; // 1:2 — reward = 2× risk
+          tp = entry + riskPerShare * 2.0;
           break;
         case RiskMethod.RR_1_3:
-          tp = entry + riskPerShare * 3.0; // 1:3 — reward = 3× risk
+          tp = entry + riskPerShare * 3.0;
           break;
         case RiskMethod.SWING_LOW:
-          // BUY Swing: SL = swing low, TP = entry + 2× risk (1:2)
           tp = entry + riskPerShare * 2.0;
           break;
         case RiskMethod.CUSTOM:
-          // User sets TP manually — just read field or fallback 1:2
           tp = double.tryParse(targetController.text) ?? entry + riskPerShare * 2.0;
           break;
         default:
           tp = entry + riskPerShare * 2.0;
       }
     } else {
-      // ── SELL / SHORT ───────────────────────────────
-      // Entry > SL is WRONG for SELL — SL is ABOVE entry
-      // TP is BELOW entry
       switch (method) {
         case RiskMethod.RR_1_1:
-          tp = entry - riskPerShare * 1.0; // Price drops by risk amount
+          tp = entry - riskPerShare * 1.0;
           break;
         case RiskMethod.RR_1_2:
           tp = entry - riskPerShare * 2.0;
@@ -209,7 +190,6 @@ class RiskManagementController extends GetxController {
           tp = entry - riskPerShare * 3.0;
           break;
         case RiskMethod.SWING_HIGH:
-          // SELL Swing: SL = swing high (above entry), TP = entry - 2× risk
           tp = entry - riskPerShare * 2.0;
           break;
         case RiskMethod.CUSTOM:
@@ -222,12 +202,11 @@ class RiskManagementController extends GetxController {
 
     // ── Guard TP on wrong side ─────────────────────────
     if (tradeSide == TradeSide.BUY && tp <= entry && method != RiskMethod.CUSTOM) {
-      tp = entry + riskPerShare * 2.0; // Force valid
+      tp = entry + riskPerShare * 2.0;
     }
     if (tradeSide == TradeSide.SELL && tp >= entry && method != RiskMethod.CUSTOM) {
-      tp = entry - riskPerShare * 2.0; // Force valid
+      tp = entry - riskPerShare * 2.0;
     }
-    // Guard: TP must be > 0
     if (tp <= 0) tp = entry * 0.5;
 
     // ── Update target field (except CUSTOM) ────────────
@@ -255,53 +234,71 @@ class RiskManagementController extends GetxController {
   }
 
   // ─────────────────────────────────────────────
-  // CONFIRM & PLACE ORDER
+  // CONFIRM & PLACE ORDER — robust error handling
   // ─────────────────────────────────────────────
   Future<bool> confirmAndPlaceOrder() async {
+    // 1. Validate risk calculation
     final calc = calculation.value;
     if (calc == null || !calc.isValid) {
       final err = calc?.validationError ?? 'Please check your Entry, Stop Loss, and Target values.';
-      print('[RISK CONTROLLER ERROR] Invalid risk parameters: $err');
-      Get.snackbar(
-        'Invalid Risk Parameters',
-        err,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
-        colorText: Colors.white,
-        duration: const Duration(seconds: 4),
-        margin: const EdgeInsets.all(12),
-        borderRadius: 10,
-        icon: const Icon(Icons.error_outline, color: Colors.white),
-      );
+      // ignore: avoid_print
+      print('[RISK CTRL ERROR] Invalid risk parameters: $err');
+      _showErrorDialog('Invalid Risk Parameters', err);
       return false;
     }
 
-    isSubmitting.value = true;
-    print('[RISK CONTROLLER] Processing order: ${stock.symbol} ${tradeSide.name}');
-    print('[RISK CONTROLLER] Entry=₹${calc.entryPrice} | SL=₹${calc.stopLoss} | TP=₹${calc.targetPrice} | Qty=${calc.quantity} | Method=${calc.riskMethod.name}');
-
+    // 2. Check broker is configured
     final BrokerController brokerController = Get.find<BrokerController>();
-    final activeBroker = brokerController.brokers.firstWhere(
-      (b) => b.status.name == 'connected',
-      orElse: () => brokerController.brokers.first,
-    );
+
+    if (brokerController.brokers.isEmpty) {
+      const msg = 'No broker configured. Please go to Broker Settings and connect your Groww account first.';
+      print('[RISK CTRL ERROR] No brokers found — $msg');
+      _showErrorDialog('No Broker Configured', msg);
+      return false;
+    }
+
+    // 3. Find connected Groww broker
+    final BrokerAccount? growwBroker = brokerController.growwBroker;
+
+    if (growwBroker == null) {
+      const msg = 'Groww broker account not found. Please add your Groww credentials in Broker Settings.';
+      print('[RISK CTRL ERROR] Groww broker not found');
+      _showErrorDialog('Groww Not Configured', msg);
+      return false;
+    }
+
+    if (growwBroker.status != BrokerStatus.connected) {
+      const msg = 'Groww broker is disconnected. Please reconnect in Broker Settings (the session resets daily at 6 AM).';
+      print('[RISK CTRL ERROR] Groww broker is ${growwBroker.status.name} — not connected');
+      _showErrorDialog('Groww Disconnected', msg);
+      return false;
+    }
+
+    if (growwBroker.apiKey.isEmpty || growwBroker.totpSecret.isEmpty) {
+      const msg = 'Groww API credentials are incomplete. Please re-enter your TOTP Token and TOTP Secret in Broker Settings.';
+      print('[RISK CTRL ERROR] Groww credentials missing');
+      _showErrorDialog('Missing Credentials', msg);
+      return false;
+    }
+
+    // 4. Begin submission
+    isSubmitting.value = true;
 
     print('==================================================');
-    print('[RISK CONTROLLER] Broker Connection Status');
-    print('[RISK CONTROLLER] Broker Name  : ${activeBroker.name}');
-    print('[RISK CONTROLLER] Broker ID    : ${activeBroker.id}');
-    print('[RISK CONTROLLER] Status       : ${activeBroker.status.name}');
-    print('[RISK CONTROLLER] Environment  : ${activeBroker.environment}');
-    print('[RISK CONTROLLER] Base URL     : ${activeBroker.baseUrl}');
-    print('[RISK CONTROLLER] Token (20ch) : ${activeBroker.apiKey.length > 20 ? activeBroker.apiKey.substring(0, 20) : activeBroker.apiKey}...');
-    print('[RISK CONTROLLER] Last Connected: ${activeBroker.lastConnectedAt}');
+    print('[RISK CTRL] Placing order: ${stock.symbol} ${tradeSide.name}');
+    print('[RISK CTRL] Entry=₹${calc.entryPrice} | SL=₹${calc.stopLoss} | TP=₹${calc.targetPrice} | Qty=${calc.quantity} | Method=${calc.riskMethod.name}');
+    print('[RISK CTRL] Broker: ${growwBroker.name} | Status: ${growwBroker.status.name}');
+    print('[RISK CTRL] API Key (masked): ${growwBroker.apiKey.length > 8 ? growwBroker.apiKey.substring(0, 8) : growwBroker.apiKey}****');
     print('==================================================');
 
-    BrokerService brokerService = GrowwBrokerService(
-      apiKey: activeBroker.apiKey,
-      apiSecret: activeBroker.apiSecret,
-      totpSecret: activeBroker.totpSecret,
-      baseUrl: activeBroker.baseUrl.isNotEmpty ? activeBroker.baseUrl : 'https://api.groww.in',
+    final BrokerService brokerService = GrowwBrokerService(
+      apiKey: growwBroker.apiKey,
+      apiSecret: growwBroker.apiSecret,
+      totpSecret: growwBroker.totpSecret,
+      savedAccessToken: growwBroker.accessToken.isNotEmpty
+          ? growwBroker.accessToken
+          : brokerController.currentAccessToken.value,
+      baseUrl: growwBroker.baseUrl.isNotEmpty ? growwBroker.baseUrl : 'https://api.groww.in',
     );
 
     final request = OrderRequest(
@@ -310,29 +307,53 @@ class RiskManagementController extends GetxController {
       name: stock.name,
       exchange: stock.exchange,
       riskCalculation: calc,
+      productType: productType.value,
     );
 
-    final OrderResult result = await brokerService.placeRiskManagedOrder(request);
+    // 5. Place order with full exception guard
+    OrderResult result;
+    try {
+      result = await brokerService.placeRiskManagedOrder(request);
+    } catch (e, st) {
+      isSubmitting.value = false;
+      final errMsg = 'Unexpected error while placing order:\n$e';
+      print('[RISK CTRL EXCEPTION] $e');
+      print('[RISK CTRL EXCEPTION] StackTrace: $st');
+      _showErrorDialog('Order Failed', errMsg);
+      return false;
+    }
+
     isSubmitting.value = false;
 
+    // 6. Handle result
     if (result.isSuccess) {
-      print('[RISK CONTROLLER SUCCESS] OrderID=${result.orderId}');
+      print('[RISK CTRL SUCCESS] OrderID=${result.orderId} | ${result.message}');
 
-      final OrderController orderController = Get.find<OrderController>();
-      orderController.orders.insert(0, OrderItem(
-        orderId: result.orderId,
-        instrumentToken: stock.instrumentToken,
-        symbol: stock.symbol,
-        name: stock.name,
-        transactionType: tradeSide == TradeSide.BUY ? OrderTransactionType.BUY : OrderTransactionType.SELL,
-        orderType: OrderType.LIMIT,
-        quantity: calc.quantity,
-        price: calc.entryPrice,
-        triggerPrice: calc.stopLoss,
-        status: OrderStatus.PENDING,
-        timestamp: DateTime.now(),
-      ));
+      // Record in local order history
+      try {
+        final OrderController orderController = Get.find<OrderController>();
+        orderController.orders.insert(0, OrderItem(
+          orderId: result.orderId,
+          instrumentToken: stock.instrumentToken,
+          symbol: stock.symbol,
+          name: stock.name,
+          transactionType: tradeSide == TradeSide.BUY
+              ? OrderTransactionType.BUY
+              : OrderTransactionType.SELL,
+          orderType: OrderType.LIMIT,
+          quantity: calc.quantity,
+          price: calc.entryPrice,
+          triggerPrice: calc.stopLoss,
+          status: OrderStatus.PENDING,
+          timestamp: DateTime.now(),
+        ));
+        print('[RISK CTRL] Order recorded in local history');
+      } catch (e) {
+        // Non-fatal — local history recording failed, but Groww order was placed
+        print('[RISK CTRL WARNING] Could not record in local order history: $e');
+      }
 
+      // Show animated success dialog
       final ctx = Get.context;
       if (ctx != null && ctx.mounted) {
         await OrderSuccessDialog.show(
@@ -345,20 +366,58 @@ class RiskManagementController extends GetxController {
       }
       return true;
     } else {
-      print('[RISK CONTROLLER ERROR] Broker rejected: ${result.message}');
-      Get.snackbar(
-        'Order Rejected by Broker',
-        result.message,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
-        colorText: Colors.white,
-        duration: const Duration(seconds: 5),
-        margin: const EdgeInsets.all(12),
-        borderRadius: 10,
-        icon: const Icon(Icons.cancel_outlined, color: Colors.white),
-      );
+      print('[RISK CTRL ERROR] Broker rejected: ${result.message}');
+      _showErrorDialog('Order Rejected', result.message);
       return false;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Error Dialog (proper modal, not snackbar)
+  // ─────────────────────────────────────────────
+  void _showErrorDialog(String title, String message) {
+    // Dismiss any existing dialogs first
+    if (Get.isDialogOpen == true) Get.back();
+
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            message,
+            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Get.back(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
   }
 
   @override
@@ -367,6 +426,7 @@ class RiskManagementController extends GetxController {
     quantityController.dispose();
     stopLossController.dispose();
     targetController.dispose();
+    bufferController.dispose();
     super.onClose();
   }
 }

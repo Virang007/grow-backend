@@ -47,7 +47,13 @@ class BrokerController extends GetxController {
         if (isTokenExpired6AM(broker.lastConnectedAt)) {
           print('[GROWW RESET] 6 AM Daily Reset detected! Status set to disconnected.');
           broker.status = BrokerStatus.disconnected;
+          broker.apiKey = '';
+          broker.apiSecret = '';
+          broker.totpSecret = '';
+          broker.accessToken = '';
           currentAccessToken.value = '';
+        } else if (broker.accessToken.isNotEmpty) {
+          currentAccessToken.value = broker.accessToken;
         }
       }
     }
@@ -92,6 +98,7 @@ class BrokerController extends GetxController {
             description: 'Groww Stock Broker API Integration',
             apiKey: growwTotpToken.trim(),
             totpSecret: growwTotpSecret.trim(),
+            accessToken: accessToken,
             status: BrokerStatus.connected,
             lastConnectedAt: DateTime.now(),
           );
@@ -99,6 +106,7 @@ class BrokerController extends GetxController {
         } else {
           groww.apiKey = growwTotpToken.trim();
           groww.totpSecret = growwTotpSecret.trim();
+          groww.accessToken = accessToken;
           groww.status = BrokerStatus.connected;
           groww.lastConnectedAt = DateTime.now();
         }
@@ -136,6 +144,10 @@ class BrokerController extends GetxController {
     if (groww != null) {
       groww.status = BrokerStatus.disconnected;
       groww.lastConnectedAt = null;
+      groww.apiKey = '';
+      groww.apiSecret = '';
+      groww.totpSecret = '';
+      groww.accessToken = '';
       currentAccessToken.value = '';
       brokers.refresh();
       _updateConnectedCount();

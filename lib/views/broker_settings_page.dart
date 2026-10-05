@@ -182,15 +182,44 @@ class BrokerSettingsPage extends StatelessWidget {
                               broker.status == BrokerStatus.connected
                                   ? 'Save & Update Credentials'
                                   : 'Save & Connect Broker',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
                             ),
                     ),
                   );
                 }),
+                // Disconnect option inside modal if connected
+                if (broker.status == BrokerStatus.connected) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        totpTokenController.clear();
+                        totpSecretController.clear();
+                        await controller.disconnectGroww();
+                        onBrokersUpdated();
+                        if (modalContext.mounted) {
+                          Navigator.pop(modalContext);
+                        }
+                      },
+                      icon: const Icon(Icons.link_off, size: 16, color: Color(0xFFEF4444)),
+                      label: const Text(
+                        'Disconnect Broker',
+                        style: TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFEF4444)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

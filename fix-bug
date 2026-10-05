@@ -1,0 +1,108 @@
+Analyze the current Groww order failure from the actual logs.
+
+The order request is reaching Groww successfully, but Groww returns:
+
+```text
+HTTP 401
+code: GA005
+message: No registered IPs found for this user. Please register your IPs first.
+```
+
+Current logs confirm:
+
+```text
+[GROWW AUTH] Real Access Token generated successfully!
+[GROWW ORDER] Placing order with validated ACCESS_TOKEN
+[GROWW ORDER] URL: https://api.groww.in/v1/order/create
+[GROWW ORDER] Response Status: 401
+[GROWW ORDER] code: GA005
+[GROWW ORDER] No registered IPs found for this user.
+```
+
+Important:
+
+The access token IS being generated successfully.
+
+Do NOT change the TOTP generation or successful token-generation flow.
+
+Do NOT keep refreshing the access token when the actual Groww error is GA005.
+
+### Required changes
+
+1. Detect Groww error code:
+
+```text
+GA005
+```
+
+2. Treat GA005 as an IP-registration/configuration error, NOT as an expired/invalid access-token error.
+
+3. Do NOT automatically generate another TOTP/access token when the response is:
+
+```text
+GA005
+```
+
+4. Do NOT retry the same order automatically after GA005.
+
+5. Show a clear user-facing error:
+
+```text
+Groww requires your current IP address to be registered before placing orders.
+Please register the IP in your Groww API settings and try again.
+```
+
+6. Preserve the existing access token in memory/storage.
+
+7. Keep the existing order payload unchanged.
+
+8. Do NOT modify:
+
+   * BUY/SELL logic
+   * Quantity
+   * Entry price
+   * SL
+   * Target
+   * Intraday/Delivery
+   * Stock search
+   * Risk calculation
+   * Order payload
+   * TOTP generation
+
+### Also inspect the current retry logic
+
+The logs show:
+
+```text
+[GROWW ORDER] Token refresh successful. Retrying order once...
+```
+
+This retry logic must NOT be triggered for `GA005`.
+
+Retry/reauthentication should only happen for an actual authentication/token-expiry response if the existing implementation supports that.
+
+For:
+
+```text
+GA005
+```
+
+stop immediately and show the IP-registration error.
+
+Do not hide the real Groww error behind:
+
+```text
+ACCESS_TOKEN rejected. Re-authenticate.
+```
+
+because the actual Groww response is specifically:
+
+```text
+No registered IPs found for this user.
+```
+
+At the end, explain:
+
+1. Where GA005 is currently being incorrectly treated as token failure.
+2. Where the automatic token refresh/retry is triggered.
+3. What exact code was changed.

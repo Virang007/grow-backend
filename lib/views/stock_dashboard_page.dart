@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../models/stock.dart';
 import '../services/stock_service.dart';
 import '../services/storage_service.dart';
@@ -23,14 +24,14 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounceTimer;
 
-  List<Stock> _watchlistStocks = [];
-  List<Stock> _searchResults = [];
-  List<String> _savedSymbols = [];
+  final RxList<Stock> _watchlistStocks = <Stock>[].obs;
+  final RxList<Stock> _searchResults = <Stock>[].obs;
+  final RxList<String> _savedSymbols = <String>[].obs;
 
-  bool _isSearching = false;
-  bool _isLoading = true;
-  bool _hasError = false;
-  String _errorMessage = '';
+  final RxBool _isSearching = false.obs;
+  final RxBool _isLoading = true.obs;
+  final RxBool _hasError = false.obs;
+  final RxString _errorMessage = ''.obs;
 
   @override
   void initState() {
@@ -47,30 +48,25 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-      _errorMessage = '';
-    });
+    _isLoading.value = true;
+    _hasError.value = false;
+    _errorMessage.value = '';
 
     try {
-      _savedSymbols = await StorageService.getSavedStockSymbols();
-      final fetched = await StockService.fetchBatchStockQuotes(_savedSymbols);
+      final saved = await StorageService.getSavedStockSymbols();
+      final fetched = await StockService.fetchBatchStockQuotes(saved);
 
       for (var stock in fetched) {
         stock.isSaved = true;
       }
 
-      setState(() {
-        _watchlistStocks = fetched;
-        _isLoading = false;
-      });
+      _savedSymbols.assignAll(saved);
+      _watchlistStocks.assignAll(fetched);
+      _isLoading.value = false;
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-        _errorMessage = 'Unable to fetch NSE/BSE market quotes. Check connection.';
-      });
+      _isLoading.value = false;
+      _hasError.value = true;
+      _errorMessage.value = 'Unable to fetch NSE/BSE market quotes. Check connection.';
     }
   }
 
@@ -78,19 +74,15 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
       _debounceTimer?.cancel();
-      setState(() {
-        _isSearching = false;
-        _searchResults = [];
-      });
+      _isSearching.value = false;
+      _searchResults.clear();
       return;
     }
 
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
-      setState(() {
-        _isSearching = true;
-        _isLoading = true;
-      });
+      _isSearching.value = true;
+      _isLoading.value = true;
 
       try {
         final results = await StockService.searchLiveStocks(query);
@@ -99,16 +91,12 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
         }
 
         if (mounted) {
-          setState(() {
-            _searchResults = results;
-            _isLoading = false;
-          });
+          _searchResults.assignAll(results);
+          _isLoading.value = false;
         }
       } catch (e) {
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          _isLoading.value = false;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Indian market search failed. Try again.'),
@@ -124,20 +112,22 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
     final messenger = ScaffoldMessenger.of(context);
     final bool newSavedState = !stock.isSaved;
 
-    setState(() {
-      stock.isSaved = newSavedState;
-      if (newSavedState) {
-        if (!_savedSymbols.contains(stock.symbol)) {
-          _savedSymbols.add(stock.symbol);
-        }
-        if (!_watchlistStocks.any((s) => s.symbol == stock.symbol)) {
-          _watchlistStocks.add(stock);
-        }
-      } else {
-        _savedSymbols.remove(stock.symbol);
-        _watchlistStocks.removeWhere((s) => s.symbol == stock.symbol);
+    stock.isSaved = newSavedState;
+    if (newSavedState) {
+      if (!_savedSymbols.contains(stock.symbol)) {
+        _savedSymbols.add(stock.symbol);
       }
-    });
+      if (!_watchlistStocks.any((s) => s.symbol == stock.symbol)) {
+        _watchlistStocks.add(stock);
+      }
+    } else {
+      _savedSymbols.remove(stock.symbol);
+      _watchlistStocks.removeWhere((s) => s.symbol == stock.symbol);
+    }
+    // Force Rx list update notification
+    _watchlistStocks.refresh();
+    _savedSymbols.refresh();
+
 
     final success = await StorageService.saveSavedStockSymbols(_savedSymbols);
 
@@ -313,186 +303,183 @@ class _StockDashboardPageState extends State<StockDashboardPage> {
                 ),
               ),
 
-              // Search Results vs Watchlist View
-              if (_isSearching) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Text(
-                      'Indian Stock Results (${_searchResults.length})',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                _isLoading
-                    ? const SliverToBoxAdapter(
-                        child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(30),
-                            child: CircularProgressIndicator(color: Color(0xFF2563EB)),
-                          ),
-                        ),
-                      )
-                    : _searchResults.isEmpty
-                        ? SliverToBoxAdapter(
-                            child: Container(
-                              padding: const EdgeInsets.all(40),
-                              alignment: Alignment.center,
-                              child: Text(
-                                'No Indian stocks found matching "${_searchController.text}"',
-                                style: TextStyle(color: Colors.grey[500]),
-                              ),
-                            ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final stock = _searchResults[index];
-                                return _buildStockListItem(stock);
-                              },
-                              childCount: _searchResults.length,
-                            ),
-                          ),
-              ] else ...[
-                // Indian Market Indices Ribbon
-                SliverToBoxAdapter(
-                  child: Container(
-                    height: 95,
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        _buildMarketIndexCard('NIFTY 50', '25,410.20', '+0.45%', true),
-                        _buildMarketIndexCard('SENSEX', '83,184.40', '+0.52%', true),
-                        _buildMarketIndexCard('NIFTY BANK', '52,240.10', '+0.38%', true),
-                        _buildMarketIndexCard('NIFTY IT', '42,890.60', '-0.15%', false),
-                      ],
-                    ),
-                  ),
-                ),
+              // Search Results vs Watchlist View — fully reactive via Obx
+              SliverToBoxAdapter(
+                child: Obx(() {
+                  final isSearching = _isSearching.value;
+                  final isLoading = _isLoading.value;
+                  final hasError = _hasError.value;
 
-                // Watchlist Header
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  if (isSearching) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'NSE/BSE Watchlist',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '${_watchlistStocks.length} Saved',
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Error View
-                if (_hasError)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.all(16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
-                      ),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.wifi_off, color: Color(0xFFEF4444), size: 36),
-                          const SizedBox(height: 8),
-                          Text(
-                            _errorMessage,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: _loadData,
-                            icon: const Icon(Icons.refresh, size: 16),
-                            label: const Text('Retry Connection'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else if (_isLoading)
-                  const SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(30),
-                        child: CircularProgressIndicator(color: Color(0xFF2563EB)),
-                      ),
-                    ),
-                  )
-                else if (_watchlistStocks.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.all(16),
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF161B22),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF2A2E39)),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(Icons.bookmark_outline,
-                              size: 44, color: Colors.grey[600]),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Your Watchlist is Empty',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Use the search bar above to search for Indian stocks (e.g. RELIANCE, TCS, INFY) and tap the bookmark icon.',
-                            textAlign: TextAlign.center,
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          child: Text(
+                            'Indian Stock Results (${_searchResults.length})',
                             style: TextStyle(
                               color: Colors.grey[400],
-                              fontSize: 13,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                        ),
+                        if (isLoading)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(30),
+                              child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+                            ),
+                          )
+                        else if (_searchResults.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(40),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'No Indian stocks found matching "${_searchController.text}"',
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          )
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _searchResults.length,
+                            itemBuilder: (context, index) =>
+                                _buildStockListItem(_searchResults[index]),
+                          ),
+                      ],
+                    );
+                  }
+
+                  // Watchlist mode
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Indian Market Indices Ribbon
+                      SizedBox(
+                        height: 95,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          children: [
+                            _buildMarketIndexCard('NIFTY 50', '25,410.20', '+0.45%', true),
+                            _buildMarketIndexCard('SENSEX', '83,184.40', '+0.52%', true),
+                            _buildMarketIndexCard('NIFTY BANK', '52,240.10', '+0.38%', true),
+                            _buildMarketIndexCard('NIFTY IT', '42,890.60', '-0.15%', false),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final stock = _watchlistStocks[index];
-                        return _buildStockListItem(stock);
-                      },
-                      childCount: _watchlistStocks.length,
-                    ),
-                  ),
-              ],
+                      // Watchlist Header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'NSE/BSE Watchlist',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${_watchlistStocks.length} Saved',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Error / Loading / Empty / List states
+                      if (hasError)
+                        Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.wifi_off,
+                                  color: Color(0xFFEF4444), size: 36),
+                              const SizedBox(height: 8),
+                              Text(
+                                _errorMessage.value,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13),
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: _loadData,
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Retry Connection'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (isLoading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(30),
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF2563EB)),
+                          ),
+                        )
+                      else if (_watchlistStocks.isEmpty)
+                        Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161B22),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF2A2E39)),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(Icons.bookmark_outline,
+                                  size: 44, color: Colors.grey[600]),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Your Watchlist is Empty',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Use the search bar above to search for Indian stocks '
+                                '(e.g. RELIANCE, TCS, INFY) and tap the bookmark icon.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: Colors.grey[400], fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _watchlistStocks.length,
+                          itemBuilder: (context, index) =>
+                              _buildStockListItem(_watchlistStocks[index]),
+                        ),
+                    ],
+                  );
+                }),
+              ),
             ],
           ),
         ),

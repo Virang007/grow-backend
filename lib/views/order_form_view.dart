@@ -24,7 +24,14 @@ class _OrderFormViewState extends State<OrderFormView> {
   late TextEditingController priceController;
   final TextEditingController triggerPriceController = TextEditingController(text: '0.0');
 
-  OrderType _selectedOrderType = OrderType.MARKET;
+  final Rx<OrderType> _selectedOrderType = OrderType.MARKET.obs;
+  final RxDouble _totalOrderValue = 0.0.obs;
+
+  void _recalculateTotal() {
+    final int qty = int.tryParse(quantityController.text) ?? 1;
+    final double targetPrice = double.tryParse(priceController.text) ?? widget.instrument.price;
+    _totalOrderValue.value = qty * targetPrice;
+  }
 
   @override
   void initState() {
@@ -32,6 +39,7 @@ class _OrderFormViewState extends State<OrderFormView> {
     priceController = TextEditingController(
       text: widget.instrument.price.toStringAsFixed(2),
     );
+    _recalculateTotal();
   }
 
   @override
@@ -51,10 +59,6 @@ class _OrderFormViewState extends State<OrderFormView> {
         widget.isBuy ? OrderTransactionType.BUY : OrderTransactionType.SELL;
     final Color actionColor =
         widget.isBuy ? const Color(0xFF10B981) : const Color(0xFFEF4444);
-
-    final int qty = int.tryParse(quantityController.text) ?? 1;
-    final double targetPrice = double.tryParse(priceController.text) ?? widget.instrument.price;
-    final double totalOrderValue = qty * targetPrice;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
@@ -166,16 +170,12 @@ class _OrderFormViewState extends State<OrderFormView> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
+            Obx(() => Row(
               children: OrderType.values.map((type) {
-                final isSelected = _selectedOrderType == type;
+                final isSelected = _selectedOrderType.value == type;
                 return Expanded(
                   child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedOrderType = type;
-                      });
-                    },
+                    onTap: () => _selectedOrderType.value = type,
                     child: Container(
                       margin: const EdgeInsets.only(right: 6),
                       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -196,7 +196,7 @@ class _OrderFormViewState extends State<OrderFormView> {
                   ),
                 );
               }).toList(),
-            ),
+            )),
             const SizedBox(height: 16),
 
             // Quantity Field
@@ -213,7 +213,7 @@ class _OrderFormViewState extends State<OrderFormView> {
               controller: quantityController,
               keyboardType: TextInputType.number,
               style: const TextStyle(color: Colors.white),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => _recalculateTotal(),
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFF1E222D),
@@ -238,8 +238,14 @@ class _OrderFormViewState extends State<OrderFormView> {
             const SizedBox(height: 16),
 
             // Price Field (Enabled for LIMIT or SL)
-            if (_selectedOrderType == OrderType.LIMIT ||
-                _selectedOrderType == OrderType.SL) ...[
+            Obx(() {
+              if (_selectedOrderType.value != OrderType.LIMIT &&
+                  _selectedOrderType.value != OrderType.SL) {
+                return const SizedBox.shrink();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               const Text(
                 'Limit Price (₹)',
                 style: TextStyle(
@@ -253,7 +259,7 @@ class _OrderFormViewState extends State<OrderFormView> {
                 controller: priceController,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(color: Colors.white),
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) => _recalculateTotal(),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFF1E222D),
@@ -276,10 +282,16 @@ class _OrderFormViewState extends State<OrderFormView> {
                 ),
               ),
               const SizedBox(height: 16),
-            ],
+                ],
+              );
+            }),
 
             // Trigger Price Field (Enabled for SL)
-            if (_selectedOrderType == OrderType.SL) ...[
+            Obx(() {
+              if (_selectedOrderType.value != OrderType.SL) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               const Text(
                 'Trigger Price (₹)',
                 style: TextStyle(
@@ -315,7 +327,9 @@ class _OrderFormViewState extends State<OrderFormView> {
                 ),
               ),
               const SizedBox(height: 16),
-            ],
+                ],
+              );
+            }),
 
             // Total Order Summary Card
             Container(
@@ -332,14 +346,14 @@ class _OrderFormViewState extends State<OrderFormView> {
                     children: [
                       Text('Est. Order Total:',
                           style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-                      Text(
-                        '₹${totalOrderValue.toStringAsFixed(2)}',
+                      Obx(() => Text(
+                        '₹${_totalOrderValue.value.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
                         ),
-                      ),
+                      )),
                     ],
                   ),
                 ],
@@ -365,7 +379,7 @@ class _OrderFormViewState extends State<OrderFormView> {
                           final success = await orderController.placePaperOrder(
                             instrument: widget.instrument,
                             transactionType: transType,
-                            orderType: _selectedOrderType,
+                            orderType: _selectedOrderType.value,
                             quantity: inputQty,
                             price: inputPrice,
                             triggerPrice: inputTrigger,
