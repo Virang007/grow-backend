@@ -1,0 +1,589 @@
+Update my existing Node.js backend into a clean **stateless Groww bridge backend**.
+
+## MAIN ARCHITECTURE
+
+The backend is ONLY a bridge between my Flutter app and Groww.
+
+```text
+Flutter
+    ↓
+https://api.my-domain.com/v1/...
+    ↓
+Node.js Backend
+    ↓
+https://api.groww.in/v1/...
+    ↓
+Groww
+```
+
+The Flutter API path should match the Groww API path wherever possible.
+
+Example:
+
+```text
+Flutter:
+POST https://api.my-domain.com/v1/order/create
+
+Backend:
+POST https://api.groww.in/v1/order/create
+```
+
+The backend must receive the Flutter request, call the corresponding Groww API, and return the Groww response.
+
+## IMPORTANT
+
+Do NOT create a universal `/proxy` endpoint.
+
+Do NOT accept arbitrary `targetUrl` from Flutter.
+
+Do NOT create a database.
+
+Do NOT permanently save:
+
+* Groww access token
+* Groww API key
+* Groww TOTP token
+* Groww TOTP secret
+* broker credentials
+* order history
+* user credentials
+
+Everything must remain stateless.
+
+The backend only holds request data in memory while processing the request.
+
+Never log tokens, API keys, secrets, Authorization headers, or sensitive request bodies.
+
+---
+
+# BASE URLS
+
+Create this configuration:
+
+```js
+const GROWW_BASE_URL = 'https://api.groww.in';
+```
+
+The Flutter app will use:
+
+```text
+https://api.my-domain.com
+```
+
+Backend will use:
+
+```text
+https://api.groww.in
+```
+
+Do NOT expose the Groww base URL as a Flutter configuration requirement.
+
+---
+
+# API ROUTES
+
+Implement these routes.
+
+## 1. Health
+
+```text
+GET /v1/health
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Backend is running"
+}
+```
+
+---
+
+## 2. Server IP
+
+```text
+GET /v1/my-ip
+```
+
+This is only for checking the backend server's outbound public IP.
+
+Return:
+
+```json
+{
+  "success": true,
+  "staticIp": "123.45.67.89"
+}
+```
+
+Do not use this API for trading.
+
+---
+
+# GROWW TOKEN API
+
+## 3. Generate Groww Access Token
+
+Flutter calls:
+
+```text
+POST /v1/token/api/access
+```
+
+Backend calls:
+
+```text
+POST https://api.groww.in/v1/token/api/access
+```
+
+The backend should forward the required request body and headers.
+
+Example Flutter request:
+
+```json
+{
+  "key_type": "totp",
+  "totp": "123456"
+}
+```
+
+The backend must:
+
+1. Receive the request.
+2. Forward it to Groww.
+3. Return Groww's response.
+4. Never save the generated access token.
+5. Never log the TOTP.
+6. Never log the Authorization header.
+
+---
+
+# GROWW ORDER API
+
+## 4. Create Order
+
+Flutter:
+
+```text
+POST /v1/order/create
+```
+
+Backend:
+
+```text
+POST https://api.groww.in/v1/order/create
+```
+
+Example request:
+
+```json
+{
+  "trading_symbol": "TCS",
+  "quantity": 3,
+  "price": 2105,
+  "validity": "DAY",
+  "exchange": "NSE",
+  "segment": "CASH",
+  "product": "MIS",
+  "order_type": "LIMIT",
+  "transaction_type": "BUY",
+  "order_reference_id": "RMA-123456"
+}
+```
+
+The Flutter request will contain the Groww Authorization header:
+
+```text
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+The backend must forward the Authorization header to Groww.
+
+Do not save it.
+
+Do not log it.
+
+Do not modify the order data unless required by Groww.
+
+---
+
+# GROWW OTHER APIs
+
+Create matching bridge routes for commonly used Groww APIs.
+
+## Orders
+
+```text
+GET /v1/orders
+```
+
+Forward to:
+
+```text
+GET https://api.groww.in/v1/orders
+```
+
+---
+
+## Holdings
+
+```text
+GET /v1/holdings
+```
+
+Forward to:
+
+```text
+GET https://api.groww.in/v1/holdings
+```
+
+---
+
+## Positions
+
+```text
+GET /v1/positions
+```
+
+Forward to:
+
+```text
+GET https://api.groww.in/v1/positions
+```
+
+---
+
+## User Details
+
+```text
+GET /v1/user/detail
+```
+
+Forward to:
+
+```text
+GET https://api.groww.in/v1/user/detail
+```
+
+---
+
+# REQUEST FLOW
+
+For every Groww API:
+
+```text
+Flutter
+    │
+    │ Request
+    ▼
+Node.js Backend
+    │
+    │ Add/forward required Groww headers
+    ▼
+https://api.groww.in
+    │
+    ▼
+Groww
+    │
+    │ Response
+    ▼
+Node.js Backend
+    │
+    ▼
+Flutter
+```
+
+The backend should return Groww's HTTP status code and response body as closely as possible.
+
+---
+
+# FOLDER STRUCTURE
+
+Keep the existing project clean.
+
+Use:
+
+```text
+backend/
+├── package.json
+├── .env
+├── .env.example
+├── .gitignore
+└── src/
+    ├── app.js
+    ├── server.js
+    │
+    ├── config/
+    │   └── env.js
+    │
+    ├── routes/
+    │   ├── health.routes.js
+    │   └── groww.routes.js
+    │
+    ├── controllers/
+    │   └── groww.controller.js
+    │
+    ├── services/
+    │   └── groww.service.js
+    │
+    └── middleware/
+        └── error.middleware.js
+```
+
+Do not create unnecessary files.
+
+---
+
+# GROWw SERVICE
+
+All Groww HTTP calls must be implemented inside:
+
+```text
+src/services/groww.service.js
+```
+
+Controllers should not contain raw `fetch()` implementation.
+
+Example methods:
+
+```js
+generateAccessToken()
+createOrder()
+getOrders()
+getHoldings()
+getPositions()
+getUserDetails()
+```
+
+Keep them small and reusable.
+
+---
+
+# CONTROLLER
+
+`groww.controller.js` should only:
+
+1. Receive Flutter request.
+2. Extract required headers/body.
+3. Call Groww service.
+4. Return response.
+5. Handle errors.
+
+Do not store anything.
+
+---
+
+# ROUTES
+
+`groww.routes.js` should map:
+
+```text
+POST /v1/token/api/access
+POST /v1/order/create
+
+GET /v1/orders
+GET /v1/holdings
+GET /v1/positions
+GET /v1/user/detail
+```
+
+Health and IP should be separate routes.
+
+---
+
+# HEADERS
+
+Forward required Groww headers.
+
+Important:
+
+```text
+Authorization
+Content-Type
+Accept
+X-API-VERSION
+```
+
+Do not blindly forward every incoming Flutter header.
+
+Only forward headers that are required by Groww.
+
+Never log Authorization.
+
+---
+
+# ERROR HANDLING
+
+If Groww returns:
+
+```text
+401
+400
+403
+404
+429
+500
+```
+
+return the appropriate status to Flutter.
+
+Preserve Groww's useful error response.
+
+Example:
+
+```json
+{
+  "status": "FAILURE",
+  "error": {
+    "code": "GA005",
+    "message": "No registered IPs found for this user."
+  }
+}
+```
+
+Do not automatically retry order creation.
+
+A failed order must NOT automatically be retried because it could potentially create duplicate orders.
+
+---
+
+# SECURITY
+
+Use:
+
+* helmet
+* cors
+* JSON body size limit
+* centralized error handling
+
+Do not use:
+
+* database
+* Redis
+* JWT
+* authentication system
+* universal proxy
+* arbitrary URL forwarding
+
+The backend is intentionally simple.
+
+---
+
+# ENVIRONMENT
+
+`.env.example`:
+
+```env
+PORT=3000
+NODE_ENV=production
+GROWW_BASE_URL=https://api.groww.in
+```
+
+Do NOT put Groww access tokens, API keys, TOTP secrets, or user credentials in `.env`.
+
+---
+
+# LOGGING
+
+Safe logs are allowed:
+
+```text
+[GROWW] POST /v1/order/create
+[GROWW] Response: 200
+[GROWW] Request duration: 245ms
+```
+
+Never log:
+
+```text
+Authorization: Bearer ...
+accessToken
+apiKey
+totp
+totpSecret
+password
+complete sensitive request body
+```
+
+---
+
+# IMPORTANT STATIC IP REQUIREMENT
+
+The backend will eventually run on a server with a public static IPv4.
+
+The purpose is:
+
+```text
+Flutter
+   ↓
+Backend Domain
+   ↓
+Backend Server Static IP
+   ↓
+Groww
+```
+
+Groww should see the backend server's public IP.
+
+The custom domain used by Flutter is only the backend URL.
+
+Example:
+
+```text
+Flutter:
+https://api.my-domain.com/v1/order/create
+```
+
+Backend:
+
+```text
+https://api.groww.in/v1/order/create
+```
+
+Do not confuse the domain with the server's static public IP.
+
+---
+
+# DO NOT CHANGE FLUTTER
+
+Do not modify my Flutter project.
+
+Do not create Flutter code.
+
+Only implement/update the Node.js backend.
+
+At the end, show:
+
+1. Final folder structure.
+2. `package.json`.
+3. `.env.example`.
+4. All changed backend files.
+5. All API endpoints.
+6. Example Flutter request URLs.
+7. Example curl commands.
+8. Local run commands.
+9. Production run commands.
+
+The final backend must be lightweight, fast, clean, stateless, and specifically designed as a Groww bridge.
+
+Most important rule:
+
+```text
+Flutter Request
+      ↓
+Node.js Backend
+      ↓
+Groww API
+      ↓
+Response
+      ↓
+Flutter
+```
+
+No database.
+No token storage.
+No universal proxy.
+No arbitrary target URL.
+No unnecessary architecture.
