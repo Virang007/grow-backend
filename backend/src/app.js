@@ -3,12 +3,16 @@
 const express = require('express');
 const helmet  = require('helmet');
 const cors    = require('cors');
+const { inject } = require('@vercel/analytics');
 
 const healthRoutes = require('./routes/health.routes');
 const growwRoutes  = require('./routes/groww.routes');
 const errorMiddleware = require('./middleware/error.middleware');
 
 const app = express();
+
+// ─── Vercel Web Analytics ─────────────────────────────────────────────────────
+inject();
 
 // ─── Security & Parsing ───────────────────────────────────────────────────────
 app.use(helmet());
