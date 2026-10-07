@@ -4,16 +4,47 @@ const axios  = require('axios');
 const http   = require('http');
 const https  = require('https');
 const crypto = require('crypto');
-const { generateSync } = require('otplib');
 const config = require('../config/env');
 
 // Persistent keep-alive socket connections for low-latency forwarding
 const httpAgent  = new http.Agent({ keepAlive: true, maxSockets: 50 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
 
-// TOTP options matching Groww (SHA-1, 6 digits, 30-second window)
-const TOTP_OPTIONS = { algorithm: 'sha1', digits: 6, step: 30 };
+/**
+ * Pure Node.js zero-dependency TOTP Generator (SHA1, 6-digit, 30s step)
+ * Replaces otplib to avoid Vercel Serverless ES Module incompatibility (ERR_REQUIRE_ESM).
+ */
+function base32Decode(base32Str) {
+  const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  let hex = '';
+  const cleanStr = base32Str.replace(/=+$/, '').toUpperCase().trim();
+  for (let i = 0; i < cleanStr.length; i++) {
+    const val = base32chars.indexOf(cleanStr.charAt(i));
+    if (val === -1) throw new Error(`Invalid Base32 character: ${cleanStr.charAt(i)}`);
+    bits += val.toString(2).padStart(5, '0');
+  }
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    const chunk = bits.substr(i, 8);
+    hex += parseInt(chunk, 2).toString(16).padStart(2, '0');
+  }
+  return Buffer.from(hex, 'hex');
+}
 
+function generateTOTP(secret, step = 30, digits = 6) {
+  const key = base32Decode(secret);
+  const epoch = Math.floor(Date.now() / 1000);
+  const time = Buffer.alloc(8);
+  time.writeBigInt64BE(BigInt(Math.floor(epoch / step)), 0);
+  const hmac = crypto.createHmac('sha1', key).update(time).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  const binary = ((hmac[offset] & 0x7f) << 24) |
+                 ((hmac[offset + 1] & 0xff) << 16) |
+                 ((hmac[offset + 2] & 0xff) << 8) |
+                 (hmac[offset + 3] & 0xff);
+  const otp = binary % Math.pow(10, digits);
+  return otp.toString().padStart(digits, '0');
+}
 
 /**
  * Build the safe header object to forward to Groww.
@@ -23,100 +54,93 @@ function buildGrowwHeaders(reqHeaders) {
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'X-API-VERSION': reqHeaders['x-api-version'] || '1.0',
   };
 
-  const auth = reqHeaders['authorization'];
-  if (auth) {
-    headers['Authorization'] = auth;
-  }
+  const auth = reqHeaders['authorization'] || reqHeaders['Authorization'];
+  if (auth) headers['Authorization'] = auth;
+
+  const version = reqHeaders['x-api-version'] || reqHeaders['X-API-VERSION'];
+  if (version) headers['X-API-VERSION'] = version;
 
   return headers;
 }
 
 /**
- * Core internal method — sends a request to the Groww API.
+ * Low-level HTTP forwarder to Groww API with full metric logging.
  */
-async function callGroww(method, path, headers, data, params) {
-  const url = `${config.growwBaseUrl}${path}`;
-  const start = Date.now();
+async function callGroww(method, path, reqHeaders, data, params) {
+  const url     = `${config.growwBaseUrl}${path}`;
+  const headers = buildGrowwHeaders(reqHeaders);
+  const start   = Date.now();
 
-  console.log(`[GROWW] ${method} ${path}`);
+  console.log(`[GROWW REQ] ${method} ${path}`);
 
   try {
     const response = await axios({
-      url,
       method,
-      headers: buildGrowwHeaders(headers),
-      data: data && Object.keys(data).length > 0 ? data : undefined,
-      params: params && Object.keys(params).length > 0 ? params : undefined,
+      url,
+      headers,
+      data,
+      params,
       timeout: config.requestTimeoutMs,
       httpAgent,
       httpsAgent,
-      validateStatus: () => true,
+      validateStatus: () => true, // Don't throw on HTTP error status codes
     });
 
     const duration = Date.now() - start;
-    console.log(`[GROWW] Response: ${response.status} | Duration: ${duration}ms`);
+    console.log(`[GROWW RES] ${method} ${path} → ${response.status} (${duration}ms)`);
 
-    return { status: response.status, data: response.data };
+    return {
+      status: response.status,
+      data: response.data,
+      headers: {
+        'content-type': response.headers['content-type'],
+      },
+    };
   } catch (err) {
     const duration = Date.now() - start;
-    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-      console.error(`[GROWW] Timeout after ${duration}ms — ${method} ${path}`);
-      throw Object.assign(new Error('Groww API timed out'), { statusCode: 504 });
-    }
-    console.error(`[GROWW] Network error — ${method} ${path} — ${err.message}`);
-    throw Object.assign(new Error(`Could not reach Groww API: ${err.message}`), { statusCode: 502 });
+    console.error(`[GROWW ERR] ${method} ${path} failed after ${duration}ms: ${err.message}`);
+    throw Object.assign(new Error(`Groww API network error: ${err.message}`), {
+      statusCode: 502,
+    });
   }
 }
 
 // ─── Token ────────────────────────────────────────────────────────────────────
 
 /**
- * Generate Groww Access Token.
+ * Custom Groww Token Access Endpoint.
  *
- * Flutter sends:
- *   POST /v1/token/api/access
- *   Body: { "totp_token": "<GROWW_TOTP_TOKEN>", "totp_secret": "<GROWW_TOTP_SECRET>" }
- *
- * Backend:
- *   1. Generates 6-digit TOTP from totp_secret internally.
- *   2. Calls Groww POST /v1/token/api/access with key_type=totp.
- *   3. If Groww rejects key_type=totp with "Invalid type", retries with key_type=approval (HMAC-SHA256 checksum).
- *   4. Returns Groww's raw response to Flutter.
- *
- * No token is stored anywhere.
- * totp_secret and totp_token are NEVER logged.
+ * Accepts { totp_token, totp_secret } from Flutter.
+ * - totp_token  → Sent in Authorization header as "Bearer <totp_token>"
+ * - totp_secret → Base32 TOTP Secret string used to generate 6-digit TOTP
  */
-async function generateAccessToken(reqHeaders, body) {
-  const { totp_token, totp_secret } = body;
-
-  if (!totp_token || totp_token.trim() === '') {
+async function generateAccessToken({ totp_token, totp_secret }) {
+  if (!totp_token) {
     throw Object.assign(new Error('totp_token is required'), { statusCode: 400 });
   }
-  if (!totp_secret || totp_secret.trim() === '') {
+  if (!totp_secret) {
     throw Object.assign(new Error('totp_secret is required'), { statusCode: 400 });
   }
 
-  const token   = totp_token.trim();
-  const secret  = totp_secret.trim();
-  const path    = '/v1/token/api/access';
-  const growwUrl = `${config.growwBaseUrl}${path}`;
-  const start    = Date.now();
+  const tokenStr = totp_token.trim();
+  const secret   = totp_secret.trim();
 
-  // Build headers with totp_token as the Bearer token — never log it
-  const headers = {
-    'Authorization': `Bearer ${token}`,
+  const growwUrl = `${config.growwBaseUrl}/v1/token/api/access`;
+  const headers  = {
+    'Authorization': tokenStr.startsWith('Bearer ') ? tokenStr : `Bearer ${tokenStr}`,
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
+
+  const start = Date.now();
 
   // ── Attempt 1: key_type = "totp" ────────────────────────────────────
   console.log('[GROWW TOKEN] Generating 6-digit TOTP internally...');
   let totpCode;
   try {
-    totpCode = generateSync({ secret, ...TOTP_OPTIONS });
+    totpCode = generateTOTP(secret);
     console.log('[GROWW TOKEN] POST /v1/token/api/access (key_type=totp)');
   } catch (err) {
     throw Object.assign(
@@ -134,7 +158,6 @@ async function generateAccessToken(reqHeaders, body) {
   console.log(`[GROWW TOKEN] Response: ${response.status} (key_type=totp) | Duration: ${Date.now() - start}ms`);
 
   // ── Attempt 2: key_type = "approval" (HMAC-SHA256) ──────────────────
-  // Groww returns 400 with "Invalid type provided" when key_type=totp is not supported
   if (
     response.status === 400 &&
     JSON.stringify(response.data).toLowerCase().includes('invalid type')
@@ -156,7 +179,10 @@ async function generateAccessToken(reqHeaders, body) {
     console.log(`[GROWW TOKEN] Response: ${response.status} (key_type=approval) | Duration: ${Date.now() - start}ms`);
   }
 
-  return { status: response.status, data: response.data };
+  return {
+    status: response.status,
+    data: response.data,
+  };
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -169,14 +195,6 @@ async function getOrders(headers, params) {
   return callGroww('GET', '/v1/orders', headers, undefined, params);
 }
 
-/**
- * Get details of a single order by its Groww Order ID.
- * GET /v1/order/detail/:groww_order_id?segment=CASH
- *
- * Flutter sends:
- *   GET /v1/order/detail/GMK123456?segment=CASH
- *   Header: Authorization: Bearer <ACCESS_TOKEN>
- */
 async function getOrderById(headers, orderId, params) {
   if (!orderId) {
     throw Object.assign(new Error('groww_order_id is required'), { statusCode: 400 });
@@ -184,18 +202,6 @@ async function getOrderById(headers, orderId, params) {
   return callGroww('GET', `/v1/order/detail/${encodeURIComponent(orderId)}`, headers, undefined, params);
 }
 
-/**
- * Cancel an existing order.
- * POST /v1/order/cancel
- *
- * Flutter sends:
- *   POST /v1/order/cancel
- *   Header: Authorization: Bearer <ACCESS_TOKEN>
- *   Body: { "groww_order_id": "GMK123456", "segment": "CASH" }
- *
- * IMPORTANT: Do NOT auto-retry cancel — a duplicate cancel request is harmless
- * but duplicate order creation is not. Keep it consistent — no auto-retry.
- */
 async function cancelOrder(headers, body) {
   if (!body.groww_order_id) {
     throw Object.assign(new Error('groww_order_id is required in request body'), { statusCode: 400 });
@@ -208,12 +214,12 @@ async function cancelOrder(headers, body) {
 
 // ─── Portfolio ────────────────────────────────────────────────────────────────
 
-async function getHoldings(headers, params) {
-  return callGroww('GET', '/v1/holdings', headers, undefined, params);
+async function getHoldings(headers) {
+  return callGroww('GET', '/v1/holdings', headers);
 }
 
-async function getPositions(headers, params) {
-  return callGroww('GET', '/v1/positions', headers, undefined, params);
+async function getPositions(headers) {
+  return callGroww('GET', '/v1/positions', headers);
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -222,14 +228,8 @@ async function getUserDetails(headers) {
   return callGroww('GET', '/v1/user/detail', headers);
 }
 
-// ─── IP check (diagnostic only) ───────────────────────────────────────────────
-
-async function getPublicIp() {
-  const response = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 });
-  return response.data.ip;
-}
-
 module.exports = {
+  callGroww,
   generateAccessToken,
   createOrder,
   getOrders,
@@ -238,5 +238,4 @@ module.exports = {
   getHoldings,
   getPositions,
   getUserDetails,
-  getPublicIp,
 };

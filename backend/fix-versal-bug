@@ -1,0 +1,52 @@
+16:13:19.189 
+Installing dependencies...
+16:13:20.704 
+16:13:20.704 
+up to date in 1s
+16:13:20.704 
+16:13:20.704 
+27 packages are looking for funding
+16:13:20.704 
+  run `npm fund` for details
+16:13:20.706 
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+16:13:20.707 
+npm warn install-scripts   nodemon@1.14.10 (postinstall: node -e "console.log('\u001b[32mLove nodemon? You can now support the project via the open collective:\u001b[22m\u001b[39m\n > \u001b[96m\u001b[1mhttps://opencollective.com/nodemon/donate\u001b[0m\n')" || exit 0)
+16:13:20.708 
+npm warn install-scripts
+16:13:20.708 
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+16:13:22.777 
+Build Completed in /vercel/output [4s]
+16:13:22.828 
+Deploying outputs...
+16:13:27.953 
+Deployment completed
+16:13:27.957 
+Creating build cache...
+16:13:31.228 
+Created build cache: 3s
+16:13:31.228 
+Uploading build cache [3.13 MB]
+16:13:31.380 
+Build cache uploaded: 152.000ms
+
+error
+-------------------------------------------
+Copied 7 logs from Vercel Dashboard
+- Project: grow-backend (prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK)
+- Team: virang-acharyas-projects (team_LfOQRpn2v6XCcNZGGgiWWCpU)
+- Search query: (no search query applied)
+- Search timestamps: 2026-10-07T10:27:00.000Z to 2026-10-07T10:57:00.000Z
+- Dashboard URL: https://vercel.com/virang-acharyas-projects/grow-backend/4GbJraaQ3saYckT7dTKtqGJE11sr/logs
+- Format: JSONL
+- Documentation: https://vercel.com/docs/logs/runtime
+-------------------------------------------
+
+{"requestId":"7jbfk-1791369872197-e9250a45492b","timestamp":1791369872197,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Cannot find module './src/app'\nRequire stack:\n- /var/task/backend/api/index.js\nDid you forget to add it to \"dependencies\" in `package.json`?\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-pxb62i0bo-virang-acharyas-projects.vercel.app","requestMethod":"GET","requestPath":"/favicon.ico","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
+{"requestId":"dbfv4-1791369871272-2206c3fe12c6","timestamp":1791369871272,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Error [ERR_REQUIRE_ESM]: require() of ES Module /var/task/backend/node_modules/@scure/base/index.js from /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs not supported.\nInstead change the require of index.js in /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs to a dynamic import() which is available in all CommonJS modules.\n    at /opt/rust/nodejs.js:2:14648\n    at Module.Ro (/opt/rust/nodejs.js:2:15026)\n    at e.<computed>.ft._load (/opt/rust/nodejs.js:2:14618)\n    at a (/opt/rust/bytecode.js:2:1127) {\n  code: 'ERR_REQUIRE_ESM'\n}\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-pxb62i0bo-virang-acharyas-projects.vercel.app","requestMethod":"GET","requestPath":"/","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
+{"requestId":"g2rhp-1791369826549-a2d673405365","timestamp":1791369826549,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Error [ERR_REQUIRE_ESM]: require() of ES Module /var/task/backend/node_modules/@scure/base/index.js from /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs not supported.\nInstead change the require of index.js in /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs to a dynamic import() which is available in all CommonJS modules.\n    at /opt/rust/nodejs.js:2:14648\n    at Module.Ro (/opt/rust/nodejs.js:2:15026)\n    at e.<computed>.ft._load (/opt/rust/nodejs.js:2:14618)\n    at a (/opt/rust/bytecode.js:2:1127) {\n  code: 'ERR_REQUIRE_ESM'\n}\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-pxb62i0bo-virang-acharyas-projects.vercel.app","requestMethod":"GET","requestPath":"/","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
+{"requestId":"fc7xz-1791369826039-f3b8b991f74f","timestamp":1791369826039,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Error [ERR_REQUIRE_ESM]: require() of ES Module /var/task/backend/node_modules/@scure/base/index.js from /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs not supported.\nInstead change the require of index.js in /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs to a dynamic import() which is available in all CommonJS modules.\n    at /opt/rust/nodejs.js:2:14648\n    at Module.Ro (/opt/rust/nodejs.js:2:15026)\n    at e.<computed>.ft._load (/opt/rust/nodejs.js:2:14618)\n    at a (/opt/rust/bytecode.js:2:1127) {\n  code: 'ERR_REQUIRE_ESM'\n}\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-pxb62i0bo-virang-acharyas-projects.vercel.app","requestMethod":"GET","requestPath":"/","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
+{"requestId":"ktdm6-1791369822118-6e3412593076","timestamp":1791369822118,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Cannot find module './src/app'\nRequire stack:\n- /var/task/backend/api/index.js\nDid you forget to add it to \"dependencies\" in `package.json`?\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-nine.vercel.app","requestMethod":"GET","requestPath":"/favicon.ico","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
+{"requestId":"lxhmp-1791369820993-364ac2c20a58","timestamp":1791369820993,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Error [ERR_REQUIRE_ESM]: require() of ES Module /var/task/backend/node_modules/@scure/base/index.js from /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs not supported.\nInstead change the require of index.js in /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs to a dynamic import() which is available in all CommonJS modules.\n    at /opt/rust/nodejs.js:2:14648\n    at Module.Ro (/opt/rust/nodejs.js:2:15026)\n    at e.<computed>.ft._load (/opt/rust/nodejs.js:2:14618)\n    at a (/opt/rust/bytecode.js:2:1127) {\n  code: 'ERR_REQUIRE_ESM'\n}\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-nine.vercel.app","requestMethod":"GET","requestPath":"/","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
+{"requestId":"w2sqf-1791369820518-6011ad8c75e5","timestamp":1791369820518,"deploymentId":"dpl_4GbJraaQ3saYckT7dTKtqGJE11sr","projectId":"prj_Qbt8SZetWL53hv3I6UKSOkdrQwVK","level":"info","message":"Error [ERR_REQUIRE_ESM]: require() of ES Module /var/task/backend/node_modules/@scure/base/index.js from /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs not supported.\nInstead change the require of index.js in /var/task/backend/node_modules/@otplib/plugin-base32-scure/dist/index.cjs to a dynamic import() which is available in all CommonJS modules.\n    at /opt/rust/nodejs.js:2:14648\n    at Module.Ro (/opt/rust/nodejs.js:2:15026)\n    at e.<computed>.ft._load (/opt/rust/nodejs.js:2:14618)\n    at a (/opt/rust/bytecode.js:2:1127) {\n  code: 'ERR_REQUIRE_ESM'\n}\nNode.js process exited with exit status: 1. The logs above can help with debugging the issue.","source":"function","domain":"grow-backend-nine.vercel.app","requestMethod":"GET","requestPath":"/","responseStatusCode":500,"environment":"production","branch":"main","cache":"MISS"}
