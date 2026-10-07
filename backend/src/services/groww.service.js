@@ -116,7 +116,12 @@ async function callGroww(method, path, reqHeaders, data, params) {
  * - totp_token  → Sent in Authorization header as "Bearer <totp_token>"
  * - totp_secret → Base32 TOTP Secret string used to generate 6-digit TOTP
  */
-async function generateAccessToken({ totp_token, totp_secret }) {
+async function generateAccessToken(reqHeaders, reqBody) {
+  // Support both passing (reqHeaders, reqBody) or single object ({ totp_token, totp_secret })
+  const body = reqBody || reqHeaders || {};
+  const totp_token = body.totp_token || body.totpToken;
+  const totp_secret = body.totp_secret || body.totpSecret;
+
   if (!totp_token) {
     throw Object.assign(new Error('totp_token is required'), { statusCode: 400 });
   }
@@ -124,8 +129,8 @@ async function generateAccessToken({ totp_token, totp_secret }) {
     throw Object.assign(new Error('totp_secret is required'), { statusCode: 400 });
   }
 
-  const tokenStr = totp_token.trim();
-  const secret   = totp_secret.trim();
+  const tokenStr = String(totp_token).trim();
+  const secret   = String(totp_secret).trim();
 
   const growwUrl = `${config.growwBaseUrl}/v1/token/api/access`;
   const headers  = {
