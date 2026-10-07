@@ -1,0 +1,42 @@
+# Vercel Web Analytics Installation
+
+## Summary
+Successfully installed and configured Vercel Web Analytics for the Express.js backend application.
+
+## Changes Made
+
+### 1. Package Installation
+- **Added**: `@vercel/analytics` version ^2.0.1
+- **Package Manager**: npm
+- **Files Modified**: 
+  - `package.json` - Added @vercel/analytics to dependencies
+  - `package-lock.json` - Updated with new dependency tree
+
+### 2. Analytics Integration
+- **File Modified**: `src/app.js`
+- **Implementation**: Added the `inject()` function from `@vercel/analytics` to enable analytics tracking
+- **Location**: Integrated at the end of the Express app configuration, after all middleware and error handlers
+
+### 3. Framework-Specific Implementation
+According to the official Vercel Analytics documentation (fetched from https://vercel.com/docs/analytics/quickstart), for Express.js and other non-explicitly-supported frameworks, the generic `inject()` function is the recommended approach. This function automatically:
+- Injects the analytics tracking code
+- Handles data collection for page views and web vitals
+- Works seamlessly with serverless deployments on Vercel
+
+## Verification
+✓ Syntax checks passed for all modified files
+✓ Server starts successfully with analytics integration
+✓ No breaking changes to existing functionality
+✓ All dependencies properly installed and locked
+
+## Next Steps
+After deployment to Vercel:
+1. Enable Web Analytics in the Vercel dashboard for this project
+2. Verify analytics data collection in the dashboard after deployment
+3. Monitor the `/_vercel/insights/*` routes for analytics data flow
+
+## Technical Details
+- The `inject()` function is called at module initialization time
+- Analytics tracking begins automatically when the app is deployed to Vercel
+- No additional configuration is required for basic page view and web vitals tracking
+- The implementation preserves all existing code structure and functionality
