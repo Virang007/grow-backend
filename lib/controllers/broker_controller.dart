@@ -45,11 +45,8 @@ class BrokerController extends GetxController {
     for (var broker in loaded) {
       if (broker.id == 'groww' && broker.status == BrokerStatus.connected) {
         if (isTokenExpired6AM(broker.lastConnectedAt)) {
-          print('[GROWW RESET] 6 AM Daily Reset detected! Status set to disconnected.');
+          print('[GROWW RESET] 6 AM Daily Reset detected! Access token expired, status set to disconnected (saved credentials preserved).');
           broker.status = BrokerStatus.disconnected;
-          broker.apiKey = '';
-          broker.apiSecret = '';
-          broker.totpSecret = '';
           broker.accessToken = '';
           currentAccessToken.value = '';
         } else if (broker.accessToken.isNotEmpty) {

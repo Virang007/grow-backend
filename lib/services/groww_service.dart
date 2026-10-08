@@ -26,7 +26,7 @@ class GrowwBrokerService implements BrokerService {
     this.apiSecret = '',
     this.totpSecret = '',
     this.savedAccessToken = '',
-    this.baseUrl = 'https://api.groww.in',
+    this.baseUrl = 'https://www.freewpplugin.com',
   });
 
   @override
