@@ -1,0 +1,32 @@
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth status
+- gh config set -h github.com git_protocol https
+✓ Configured git protocol
+✓ Logged in as typistack
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth status
+✓ Configured git protocol
+✓ Logged in as typistack
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth status
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth status
+github.com
+  ✓ Logged in to github.com account typistack (keyring)
+  - Active account: true
+github.com
+  ✓ Logged in to github.com account typistack (keyring)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: github_pat_11CSFLXRY02PXC4EuGs8yy_***********************************************************
+
+  ✓ Logged in to github.com account Virang007 (keyring)
+  - Active account: false
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth switch --user typistack
+✓ Switched active account for github.com to typistack
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth switch --user virang007
+no accounts matched that criteria
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh auth switch --user Virang007
+✓ Switched active account for github.com to Virang007
+PS D:\2026\2026\RiskManageApp\riskmanageapp> gh api user --jq .login
+Virang007
+PS D:\2026\2026\RiskManageApp\riskmanageapp>

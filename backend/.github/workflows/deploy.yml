@@ -1,0 +1,14 @@
+name : my fist cicd
+
+on:
+    push:
+        branches : [main]
+
+    
+jobs:
+    test-app:
+      runs-on: ubuntu-latest
+      
+      steps:
+      - name: show me message
+        run: echo "this is my first ci/cd"
